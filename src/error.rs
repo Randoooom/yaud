@@ -29,6 +29,8 @@ pub enum ApplicationError {
     Forbidden(String),
     #[error(transparent)]
     SystemTimeError(#[from] std::time::SystemTimeError),
+    #[error(transparent)]
+    SurrealdbError(#[from] surrealdb::Error),
     #[error("Internal error occurred")]
     InternalServerError,
     #[error(transparent)]
