@@ -45,6 +45,7 @@ use tower_http::cors::CorsLayer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
+mod auth;
 mod database;
 mod error;
 mod routes;
@@ -97,6 +98,9 @@ async fn main() -> Result<(), BoxError> {
 }
 
 pub mod prelude {
+    pub use crate::database::id::Id;
+    pub use crate::database::page::Page;
+    pub use crate::database::DatabaseConnection;
     pub use crate::error::*;
     pub use crate::routes::extractor::*;
     pub use crate::sql_span;

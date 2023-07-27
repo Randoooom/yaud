@@ -53,6 +53,18 @@ macro_rules! log_test_error {
     };
 }
 
+impl From<argon2::Error> for ApplicationError {
+    fn from(_: argon2::Error) -> Self {
+        Self::Unauthorized
+    }
+}
+
+impl From<argon2::password_hash::Error> for ApplicationError {
+    fn from(_: argon2::password_hash::Error) -> Self {
+        Self::Unauthorized
+    }
+}
+
 impl IntoResponse for ApplicationError {
     fn into_response(self) -> Response {
         match self {

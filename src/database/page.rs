@@ -49,6 +49,7 @@ pub struct PagingOptions {
 }
 
 impl<'a> PagingOptions {
+    #[instrument(skip(connection))]
     pub fn execute<P, T>(
         self,
         query: &'a str,
@@ -107,6 +108,7 @@ where
     type Output = Result<Page<T>>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + Sync + 'a>>;
 
+    #[instrument(skip_all)]
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
             // calculate offset

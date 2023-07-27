@@ -23,6 +23,7 @@ use surrealdb::Surreal;
 #[cfg(not(test))]
 use version_compare::{Cmp, Version};
 
+pub mod definitions;
 pub mod id;
 pub mod page;
 
@@ -58,8 +59,7 @@ pub async fn connect() -> Result<DatabaseConnection> {
     cfg_if::cfg_if! {
         if #[cfg(test)] {
             let db = nanoid::nanoid!();
-            info!("Using database {db}");
-            println!("{:?}", db);
+            println!("Connected with database {:?} in namespace \"test\"", db);
 
             client
                 .use_ns("test")

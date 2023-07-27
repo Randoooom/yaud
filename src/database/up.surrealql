@@ -1,1 +1,22 @@
-DEFINE TABLE placeholder SCHEMALESS;
+DEFINE TABLE account SCHEMAFULL;
+    DEFINE FIELD first_name ON TABLE account TYPE string ASSERT $value IS NOT NULL;
+    DEFINE FIELD last_name  ON TABLE account TYPE string ASSERT $value IS NOT NULL;
+    DEFINE FIELD mail       ON TABLE account TYPE string ASSERT is::email($value);
+    DEFINE FIELD password   on TABLE account TYPE string ASSERT $value IS NOT NULL;
+    DEFINE FIELD nonce      on TABLE account TYPE string ASSERT $value IS NOT NULL;
+    DEFINE FIELD secret     on TABLE account TYPE string ASSERT $value IS NOT NULL;
+    DEFINE FIELD type       on TABLE account TYPE number ASSERT $value IS NOT NULL;
+    DEFINE FIELD totp       on TABLE account TYPE object ASSERT $value IS NOT NULL;
+    DEFINE FIELD totp.active on TABLE account TYPE bool VALUE $value OR FALSE;
+    DEFINE FIELD totp.reactivate on TABLE account TYPE bool VALUE $value OR FALSE;
+    DEFINE FIELD updated_at on TABLE account TYPE datetime VALUE $before OR time::now();
+    DEFINE FIELD created_at on TABLE account TYPE datetime VALUE $before OR time::now();
+
+DEFINE TABLE permission SCHEMAFULL;
+    DEFINE FIELD title on TABLE permission TYPE string ASSERT $value IS NOT NULL;
+
+DEFINE TABLE session SCHEMAFULL;
+    DEFINE FIELD refresh_token  on TABLE session TYPE string     ASSERT $value IS NOT NULL;
+    DEFINE FIELD account        on TABLE session TYPE string     ASSERT $value IS NOT NULL;
+    DEFINE FIELD updated_at     on TABLE session TYPE datetime   ASSERT $value IS NOT NULL;
+    DEFINE FIELD created_at     on TABLE session TYPE datetime   ASSERT $value IS NOT NULL;
