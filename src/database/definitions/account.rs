@@ -137,12 +137,14 @@ impl<'a> IntoFuture for WriteAccount<'a> {
 
             // other fields don't really matter here so we can proceed with merging the data
             let account: Account = if let Some(target) = self.target {
-                self.connection
-                    .update(target.id.to_thing())
-                    .merge(self)
-                    .await?
+                sql_span!(
+                    self.connection
+                        .update(target.id.to_thing())
+                        .merge(self)
+                        .await?
+                )
             } else {
-                self.connection.create("account").content(self).await?
+                sql_span!(self.connection.create("account").content(self).await?)
             };
 
             Ok(account)

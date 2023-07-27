@@ -17,11 +17,12 @@
 
 use crate::database::definitions::account::Account;
 use crate::prelude::*;
-use argon2::password_hash::Error::Password;
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use chacha20poly1305::aead::{Aead, Key, OsRng};
 use chacha20poly1305::{AeadCore, KeyInit, XChaCha20Poly1305, XNonce};
 use totp_rs::{Algorithm, TOTP};
+
+pub mod session;
 
 /// This encrypt the given data with the given key (argon2dwr hash) using xChaCha20Poly1305
 #[instrument(skip_all)]
@@ -85,6 +86,7 @@ pub trait Authenticate {
     async fn fetch_session(&self, connection: &DatabaseConnection) -> Result<()>;
 }
 
+#[async_trait]
 impl Authenticate for Account {
     #[instrument(skip_all)]
     async fn login(&self, password: &str, token: Option<&str>) -> Result<()> {
@@ -94,14 +96,16 @@ impl Authenticate for Account {
         Argon2::default().verify_password(&key, &PasswordHash::new(self.password().as_str())?)?;
 
         // verify the totp token, if enabled
-        if self.totp().active() && !self.totp().reactivate() {
+        if *self.totp().active() && !self.totp().reactivate() {
             return if let Some(token) = token {
                 if TOTP::new(
                     Algorithm::SHA1,
                     6,
                     1,
                     30,
-                    self.read_secret(password)?.as_bytes().to_vec(),
+                    decrypt(&self.derive_key(password)?, self.secret().as_str())
+                        .as_bytes()
+                        .to_vec(),
                     None,
                     "".to_owned(),
                 )

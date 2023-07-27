@@ -57,8 +57,8 @@ impl<'a> PagingOptions {
         connection: &'a DatabaseConnection,
     ) -> PagingRequest<'a, P, T>
     where
-        T: DeserializeOwned,
-        P: Serialize + Send + Sync,
+        T: DeserializeOwned + JsonSchema + Serialize + Send + Sync,
+        P: Serialize + Send + Sync + std::fmt::Debug,
     {
         PagingRequest {
             options: self,
@@ -91,7 +91,7 @@ fn default_page_size() -> u64 {
 pub struct PagingRequest<'a, P, T>
 where
     P: Serialize + Send + Sync,
-    T: DeserializeOwned,
+    T: DeserializeOwned + JsonSchema + Serialize + Send + Sync,
 {
     pub options: PagingOptions,
     pub query: &'a str,
@@ -103,7 +103,7 @@ where
 impl<'a, P, T> IntoFuture for PagingRequest<'a, P, T>
 where
     P: Serialize + Send + Sync,
-    T: DeserializeOwned + JsonSchema + Serialize,
+    T: DeserializeOwned + JsonSchema + Serialize + Send + Sync + 'a,
 {
     type Output = Result<Page<T>>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + Sync + 'a>>;

@@ -17,6 +17,7 @@ DEFINE TABLE permission SCHEMAFULL;
 
 DEFINE TABLE session SCHEMAFULL;
     DEFINE FIELD refresh_token  on TABLE session TYPE string     ASSERT $value IS NOT NULL;
-    DEFINE FIELD account        on TABLE session TYPE string     ASSERT $value IS NOT NULL;
-    DEFINE FIELD updated_at     on TABLE session TYPE datetime   ASSERT $value IS NOT NULL;
-    DEFINE FIELD created_at     on TABLE session TYPE datetime   ASSERT $value IS NOT NULL;
+    DEFINE FIELD target         on TABLE session TYPE string     ASSERT $value IS NOT NULL;
+    DEFINE FIELD iat            on TABLE session TYPE datetime   ASSERT $value IS NOT NULL;
+    DEFINE FIELD exp            on TABLE session TYPE datetime   ASSERT $value IS NOT NULL;
+    DEFINE FIELD refresh_exp    on TABLE session TYPE datetime   ASSERT $value IS NOT NULL;
