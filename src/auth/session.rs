@@ -45,16 +45,101 @@ pub struct Session {
     refresh_exp: DateTime<Utc>,
 }
 
-impl Session {}
+impl Session {
+    // Check whether a session is valid or not
+    #[instrument(skip(connection))]
+    pub async fn validate_session(id: &str, connection: &DatabaseConnection) -> Result<Session> {
+        // fetch the session
+        let session: Option<Session> =
+            sql_span!(connection.select(&Id::try_from(("session", id))?).await?);
+
+        match session {
+            Some(session) => {
+                if session.is_valid(connection).await.is_ok() {
+                    Ok(session)
+                } else {
+                    Err(ApplicationError::Unauthorized)
+                }
+            }
+            None => Err(ApplicationError::Unauthorized),
+        }
+    }
+
+    #[instrument(skip_all)]
+    pub async fn is_valid(&self, connection: &DatabaseConnection) -> Result<()> {
+        if Utc::now() >= self.exp {
+            // the session is not anymore valid, so we end it.
+            self.end(connection).await?;
+
+            Err(ApplicationError::Unauthorized)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Ends the given session
+    #[instrument(skip_all)]
+    pub async fn end(&self, connection: &DatabaseConnection) -> Result<()> {
+        let _: Session = sql_span!(connection.delete(&self.id).await?);
+
+        Ok(())
+    }
+
+    #[instrument(skip_all)]
+    pub async fn refresh(
+        self,
+        refresh_token: &str,
+        connection: &DatabaseConnection,
+    ) -> Result<Session> {
+        if self.refresh_token.eq(refresh_token) {
+            // start a new session, this automatically ends the current session
+            WriteSession::new(&self.target, connection).await
+        } else {
+            self.end(connection).await?;
+
+            Err(ApplicationError::Unauthorized)
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct EndSession<'a> {
+    target: &'a Id,
+    connection: &'a DatabaseConnection,
+}
+
+impl<'a> EndSession<'a> {
+    pub fn new(target: &'a Id, connection: &'a DatabaseConnection) -> Self {
+        Self { target, connection }
+    }
+}
+
+impl<'a> IntoFuture for EndSession<'a> {
+    type Output = Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + Sync + 'a>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(async move {
+            sql_span!(self
+                .connection
+                .query("DELETE FROM session WHERE target = $target")
+                .bind(("target", self.target.to_thing()))
+                .await?
+                .check()?);
+
+            Ok(())
+        })
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct WriteSession<'a> {
-    target: Id,
+    target: &'a Id,
     connection: &'a DatabaseConnection,
 }
 
 impl<'a> WriteSession<'a> {
-    fn new(target: Id, connection: &'a DatabaseConnection) -> Self {
+    pub fn new(target: &'a Id, connection: &'a DatabaseConnection) -> Self {
         Self { target, connection }
     }
 }
@@ -74,21 +159,15 @@ impl<'a> IntoFuture for WriteSession<'a> {
             let id = Id::new(("session", session_id.as_str()));
             let refresh_token = nanoid::nanoid!(64, &ALPHABET);
 
-            sql_span!(
-                self.connection
-                    .query("DELETE FROM session WHERE target = $target")
-                    .bind(("target", self.target.to_thing()))
-                    .await?
-                    .check()?,
-                "end existing sessions"
-            );
+            // end currently active sessions for the target
+            EndSession::new(&self.target, self.connection).await?;
 
             Ok(sql_span!(
                 self.connection
                     .create(id.to_thing())
                     .content(&Session {
                         id,
-                        target: self.target,
+                        target: self.target.clone(),
                         iat,
                         exp,
                         refresh_token,
@@ -102,14 +181,39 @@ impl<'a> IntoFuture for WriteSession<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::auth::session::WriteSession;
+    use crate::auth::session::{Session, WriteSession};
     use crate::prelude::Id;
     use axum::BoxError;
 
     #[tokio::test]
     async fn test_session_start() -> Result<(), BoxError> {
         let connection = crate::database::connect().await?;
-        WriteSession::new(Id::new(("account", "test")), &connection).await?;
+        WriteSession::new(&Id::new(("account", "test")), &connection).await?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_session_validation() -> Result<(), BoxError> {
+        let connection = crate::database::connect().await?;
+
+        let session = WriteSession::new(&Id::new(("account", "test")), &connection).await?;
+        assert!(session.is_valid(&connection).await.is_ok());
+        let cloned_session = session.clone();
+
+        let refreshed_session = session
+            .refresh(cloned_session.refresh_token.as_str(), &connection)
+            .await?;
+        assert!(
+            Session::validate_session(cloned_session.id.to_string().as_str(), &connection)
+                .await
+                .is_err()
+        );
+        assert_ne!(refreshed_session.id, cloned_session.id);
+        assert_ne!(
+            refreshed_session.refresh_token,
+            cloned_session.refresh_token
+        );
 
         Ok(())
     }

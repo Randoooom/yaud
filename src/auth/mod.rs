@@ -15,6 +15,7 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+use crate::auth::session::{EndSession, Session, WriteSession};
 use crate::database::definitions::account::Account;
 use crate::prelude::*;
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
@@ -22,6 +23,8 @@ use chacha20poly1305::aead::{Aead, Key, OsRng};
 use chacha20poly1305::{AeadCore, KeyInit, XChaCha20Poly1305, XNonce};
 use totp_rs::{Algorithm, TOTP};
 
+pub mod authz;
+pub mod middleware;
 pub mod session;
 
 /// This encrypt the given data with the given key (argon2dwr hash) using xChaCha20Poly1305
@@ -82,8 +85,7 @@ impl DeriveEncryptionKey for Account {
 pub trait Authenticate {
     async fn login(&self, password: &str, token: Option<&str>) -> Result<()>;
     async fn logout(&self, connection: &DatabaseConnection) -> Result<()>;
-    async fn start_session(&self, connection: &DatabaseConnection) -> Result<()>;
-    async fn fetch_session(&self, connection: &DatabaseConnection) -> Result<()>;
+    async fn start_session(&self, connection: &DatabaseConnection) -> Result<Session>;
 }
 
 #[async_trait]
@@ -125,14 +127,10 @@ impl Authenticate for Account {
     }
 
     async fn logout(&self, connection: &DatabaseConnection) -> Result<()> {
-        todo!()
+        EndSession::new(self.id(), connection).await
     }
 
-    async fn start_session(&self, connection: &DatabaseConnection) -> Result<()> {
-        todo!()
-    }
-
-    async fn fetch_session(&self, connection: &DatabaseConnection) -> Result<()> {
-        todo!()
+    async fn start_session(&self, connection: &DatabaseConnection) -> Result<Session> {
+        WriteSession::new(self.id(), connection).await
     }
 }

@@ -16,4 +16,3 @@
  */
 
 pub mod account;
-pub mod permission;

@@ -52,7 +52,9 @@ mod routes;
 mod state;
 
 pub async fn router() -> Result<Router, BoxError> {
-    let state = ApplicationState::default();
+    let connection = database::connect().await?;
+    let state = ApplicationState::from(connection);
+
     aide::gen::extract_schemas(true);
     let mut api = OpenApi::default();
 
@@ -98,6 +100,7 @@ async fn main() -> Result<(), BoxError> {
 }
 
 pub mod prelude {
+    pub use crate::auth::authz::permission::*;
     pub use crate::database::id::Id;
     pub use crate::database::page::Page;
     pub use crate::database::DatabaseConnection;

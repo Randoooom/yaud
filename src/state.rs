@@ -15,5 +15,16 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#[derive(Default, Clone)]
-pub struct ApplicationState {}
+use crate::prelude::*;
+
+#[derive(Clone, Getters)]
+#[get = "pub"]
+pub struct ApplicationState {
+    connection: DatabaseConnection,
+}
+
+impl From<DatabaseConnection> for ApplicationState {
+    fn from(connection: DatabaseConnection) -> Self {
+        Self { connection }
+    }
+}
