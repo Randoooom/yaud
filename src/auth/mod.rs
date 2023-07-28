@@ -134,3 +134,80 @@ impl Authenticate for Account {
         WriteSession::new(self.id(), connection).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::auth::{Authenticate, DeriveEncryptionKey};
+    use crate::database::definitions::account::WriteAccount;
+    use axum::BoxError;
+    use chrono::{Duration, Local};
+    use totp_rs::{Algorithm, TOTP};
+
+    #[tokio::test]
+    async fn test_login() -> Result<(), BoxError> {
+        let connection = crate::database::connect().await?;
+        let account = WriteAccount::from(&connection)
+            .set_first_name(Some("first"))
+            .set_last_name(Some("last"))
+            .set_mail(Some("test@test.de"))
+            .set_password(Some("password".to_owned()))
+            .to_owned()
+            .await?;
+
+        assert!(account.login("password", None).await.is_ok());
+        assert!(account.login("password1", None).await.is_err());
+        assert!(account.login("password", Some("123456")).await.is_ok());
+
+        assert!(WriteAccount::from(&connection)
+            .set_target(Some(&account))
+            .set_password(Some("different".to_owned()))
+            .to_owned()
+            .await
+            .is_err());
+        let account = WriteAccount::from(&connection)
+            .set_target(Some(&account))
+            .set_password(Some("different".to_owned()))
+            .set_old_password(Some("password"))
+            .to_owned()
+            .await?;
+        assert!(account.login("different", None).await.is_ok());
+        assert!(account.login("password", None).await.is_err());
+
+        let account = WriteAccount::from(&connection)
+            .set_target(Some(&account))
+            .set_totp(true)
+            .to_owned()
+            .await?;
+        let key = account.derive_key("different")?;
+        let secret = crate::auth::decrypt(&key, account.secret().as_str());
+        let totp = TOTP::new(
+            Algorithm::SHA1,
+            6,
+            1,
+            30,
+            secret.as_bytes().to_vec(),
+            None,
+            "".to_owned(),
+        )
+        .unwrap();
+        let token = totp.generate_current().unwrap();
+        let invalid_token =
+            totp.generate((Local::now() - Duration::seconds(300)).timestamp() as u64);
+        assert!(account.login("different", None).await.is_err());
+        assert!(account.login("different", Some("123456")).await.is_err());
+        assert!(account
+            .login("different", Some(invalid_token.as_str()))
+            .await
+            .is_err());
+        assert!(account
+            .login("different", Some(token.as_str()))
+            .await
+            .is_ok());
+        assert!(account
+            .login("password", Some(token.as_str()))
+            .await
+            .is_err());
+
+        Ok(())
+    }
+}

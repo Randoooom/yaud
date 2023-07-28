@@ -15,5 +15,15 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+use crate::prelude::*;
+use aide::axum::ApiRouter;
+
+pub mod auth;
 pub mod extractor;
 pub mod openapi;
+
+pub fn router(state: ApplicationState) -> ApiRouter {
+    ApiRouter::new()
+        .nest_api_service("/auth", auth::router(state.clone()))
+        .with_state(state)
+}

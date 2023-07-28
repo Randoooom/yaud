@@ -33,8 +33,10 @@ extern crate tracing;
 extern crate serde_json;
 #[macro_use]
 extern crate axum_macros;
+#[macro_use]
+extern crate hcaptcha;
 
-use crate::prelude::ApplicationState;
+use crate::prelude::*;
 use aide::axum::ApiRouter;
 use aide::openapi::OpenApi;
 use axum::http::{header, Method};
@@ -51,7 +53,7 @@ mod error;
 mod routes;
 mod state;
 
-pub async fn router() -> Result<Router, BoxError> {
+pub async fn router() -> std::result::Result<Router, BoxError> {
     let connection = database::connect().await?;
     let state = ApplicationState::from(connection);
 
@@ -60,10 +62,11 @@ pub async fn router() -> Result<Router, BoxError> {
 
     Ok(ApiRouter::new()
         .nest_api_service("/docs", routes::openapi::router(state.clone()))
+        .nest_api_service("/", routes::router(state))
         .finish_api_with(&mut api, routes::openapi::transform_api)
         .layer(
             CorsLayer::new()
-                .allow_origin([std::env::var("DOMAIN").unwrap().parse().unwrap()])
+                .allow_origin([DOMAIN.parse().unwrap()])
                 .allow_methods(vec![
                     Method::GET,
                     Method::POST,
@@ -83,7 +86,10 @@ pub async fn router() -> Result<Router, BoxError> {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), BoxError> {
+async fn main() -> std::result::Result<(), BoxError> {
+    let _ = std::env::var("HCAPTCHA_SECRET").expect("HCAPTCHA_SECRET NOT FOUND");
+    let _ = std::env::var("DOMAIN").expect("DOMAIN NOT FOUND");
+
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::from_default_env())
         .with(tracing_subscriber::fmt::layer())
@@ -106,6 +112,11 @@ pub mod prelude {
     pub use crate::database::DatabaseConnection;
     pub use crate::error::*;
     pub use crate::routes::extractor::*;
-    pub use crate::sql_span;
     pub use crate::state::*;
+    pub use crate::{require_session, sql_span};
+
+    lazy_static::lazy_static! {
+        pub static ref HCAPTCHA_SECRET: String = std::env::var("HCAPTCHA_SECRET").expect("HCAPTCHA_SECRET NOT FOUND");
+        pub static ref DOMAIN: String = std::env::var("DOMAIN").expect("DOMAIN NOT FOUND");
+    }
 }

@@ -15,42 +15,55 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-use crate::auth::session::Session;
-use crate::database::definitions::account::Account;
-use crate::prelude::*;
-use axum::extract::State;
-use axum::http::Request;
-use axum::middleware::Next;
-use axum::response::{IntoResponse, Response};
-use axum_extra::extract::CookieJar;
+#[macro_export]
+macro_rules! require_session {
+    ($state:ident, $permission:path) => {{
+        use crate::auth::authz::Authorize;
+        use crate::auth::session::Session;
+        use crate::database::definitions::account::Account;
+        use crate::prelude::*;
+        use axum::extract::State;
+        use axum::http::Request;
+        use axum::middleware::Next;
+        use axum::response::{IntoResponse, Response};
+        use axum_extra::extract::CookieJar;
 
-async fn require_session<B>(
-    State(state): State<ApplicationState>,
-    jar: CookieJar,
-    mut request: Request<B>,
-    next: Next<B>,
-) -> Response {
-    match jar.get("session") {
-        Some(cookie) => {
-            let session_id = cookie.value();
-            let connection = state.connection();
-            let extensions = request.extensions_mut();
+        async fn require_session<B>(
+            State(state): State<ApplicationState>,
+            jar: CookieJar,
+            mut request: Request<B>,
+            next: Next<B>,
+        ) -> Response {
+            match jar.get("session") {
+                Some(cookie) => {
+                    let session_id = cookie.value();
+                    let connection = state.connection();
+                    let extensions = request.extensions_mut();
 
-            // verify the session
-            if let Ok(session) = Session::validate_session(session_id, connection).await {
-                // fetch the account
-                let account: Account = connection.select(session.target()).await.unwrap();
+                    // verify the session
+                    if let Ok(session) = Session::validate_session(session_id, connection).await {
+                        // fetch the account
+                        let account: Account = connection.select(session.target()).await.unwrap();
 
-                // TODO: permissions
+                        // handle the permissions
+                        if account
+                            .has_permission(&$permission, connection)
+                            .await
+                            .is_ok()
+                        {
+                            extensions.insert(account);
+                            extensions.insert(session);
 
-                extensions.insert(account);
-                extensions.insert(session);
+                            return next.run(request).await;
+                        }
+                    };
 
-                return next.run(request).await;
-            };
-
-            ApplicationError::Unauthorized.into_response()
+                    ApplicationError::Unauthorized.into_response()
+                }
+                None => ApplicationError::Unauthorized.into_response(),
+            }
         }
-        None => ApplicationError::Unauthorized.into_response(),
-    }
+
+        axum::middleware::from_fn_with_state($state.clone(), require_session)
+    }};
 }

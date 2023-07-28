@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-aide = { version = "0.11.0", features = ["redoc", "axum", "axum-extra", "macros"] }
+aide = { version = "0.11.0", features = ["redoc", "axum", "axum-extra-cookie", "macros"] }
 axum = { version = "0.6.19", features = ["macros", "multipart"] }
 axum-extra = { version = "0.7.5", features = ["cookie"] }
 axum-jsonschema = { version = "0.6.0", features = ["aide"] }
@@ -24,6 +24,7 @@ cfg-if = "1.0.0"
 chacha20poly1305 = "0.10.1"
 chrono = "0.4.26"
 getset = "0.1.2"
+hcaptcha = "2.2.2"
 lazy_static = "1.4.0"
 nanoid = "0.4.0"
 openssl = "0.10.55"

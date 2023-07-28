@@ -65,6 +65,12 @@ impl From<argon2::password_hash::Error> for ApplicationError {
     }
 }
 
+impl From<hcaptcha::HcaptchaError> for ApplicationError {
+    fn from(_: hcaptcha::HcaptchaError) -> Self {
+        Self::Unauthorized
+    }
+}
+
 impl IntoResponse for ApplicationError {
     fn into_response(self) -> Response {
         match self {

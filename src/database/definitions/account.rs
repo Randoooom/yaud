@@ -15,10 +15,11 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+use crate::auth::DeriveEncryptionKey;
 use crate::prelude::*;
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::SaltString;
-use argon2::{Argon2, PasswordHasher};
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use chrono::{DateTime, Utc};
 use std::future::{Future, IntoFuture};
 use std::pin::Pin;
@@ -46,7 +47,23 @@ pub struct Account {
     created_at: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug, Serialize, Getters, Setters)]
+impl Account {
+    #[instrument(skip(connection))]
+    pub async fn from_username(
+        username: &str,
+        connection: &DatabaseConnection,
+    ) -> Result<Option<Account>> {
+        let account = sql_span!(connection
+            .query("SELECT * FROM account WHERE username = $username")
+            .bind(("username", username))
+            .await?
+            .take::<Option<Account>>(0)?);
+
+        Ok(account)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Getters, Setters, MutGetters)]
 pub struct WriteAccount<'a> {
     #[get = "pub"]
     #[set = "pub"]
@@ -64,6 +81,9 @@ pub struct WriteAccount<'a> {
     #[set = "pub"]
     #[serde(skip_serializing_if = "Option::is_none")]
     password: Option<String>,
+    #[set = "pub"]
+    #[serde(skip)]
+    old_password: Option<&'a str>,
     #[serde(skip)]
     connection: &'a DatabaseConnection,
     #[serde(skip)]
@@ -77,6 +97,7 @@ pub struct WriteAccount<'a> {
     nonce: Option<String>,
     #[serde(skip_deserializing)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[get_mut = "pub"]
     totp: Option<TotpData>,
 }
 
@@ -92,7 +113,23 @@ impl<'a> From<&'a DatabaseConnection> for WriteAccount<'a> {
             secret: None,
             nonce: None,
             totp: None,
+            old_password: None,
         }
+    }
+}
+
+impl<'a> WriteAccount<'a> {
+    pub fn set_totp(&mut self, value: bool) -> &mut Self {
+        if let Some(ref mut data) = self.totp_mut() {
+            data.active = value;
+        } else {
+            self.totp = Some(TotpData {
+                active: value,
+                reactivate: false,
+            })
+        }
+
+        self
     }
 }
 
@@ -103,6 +140,23 @@ impl<'a> IntoFuture for WriteAccount<'a> {
     #[instrument(skip_all)]
     fn into_future(mut self) -> Self::IntoFuture {
         Box::pin(async move {
+            // if the password gets changed and the target is not null we have to check the old password
+            if self.password.is_some() {
+                if let Some(account) = &self.target {
+                    if let Some(old_password) = &self.old_password {
+                        // derive the key
+                        let key = account.derive_key(old_password)?;
+                        // compare the hashes
+                        Argon2::default().verify_password(
+                            &key,
+                            &PasswordHash::new(account.password().as_str())?,
+                        )?;
+                    } else {
+                        return Err(ApplicationError::Unauthorized);
+                    }
+                }
+            };
+
             // check if sensible data has to get changed
             if let Some(password) = self.password {
                 // generate a random nonce
