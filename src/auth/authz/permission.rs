@@ -61,7 +61,7 @@ macro_rules! permissions {
     };
 }
 
-permissions!();
+permissions!((TASK_REQUEST_VIEW, "task.request.view"));
 
 #[derive(Clone, Debug)]
 pub struct PermissionHandler<'a> {

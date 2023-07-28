@@ -17,6 +17,8 @@
 
 use crate::database::definitions::account::Account;
 use crate::prelude::*;
+use std::future::{Future, IntoFuture};
+use std::pin::Pin;
 
 pub mod permission;
 
@@ -45,7 +47,8 @@ impl Authorize for Account {
             .bind(("permission", permission.to_thing()))
             .bind(("account", self.id().to_thing()))
             .await?)
-            .take::<bool>((0, "result"))?;
+            .take::<Option<bool>>((0, "result"))?
+            .unwrap();
 
             if result {
                 Ok(())
@@ -56,8 +59,80 @@ impl Authorize for Account {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct GrantPermission<'a> {
+    permission: &'a Permission,
+    target: &'a Id,
+    connection: &'a DatabaseConnection,
+}
+
+impl<'a> From<(&'a Permission, &'a Id, &'a DatabaseConnection)> for GrantPermission<'a> {
+    fn from(value: (&'a Permission, &'a Id, &'a DatabaseConnection)) -> Self {
+        Self {
+            permission: value.0,
+            target: value.1,
+            connection: value.2,
+        }
+    }
+}
+
+impl<'a> IntoFuture for GrantPermission<'a> {
+    type Output = Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + Sync + 'a>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(async move {
+            sql_span!(self
+                .connection
+                .query("RELATE $account->has->$permission")
+                .bind(("account", self.target.to_thing()))
+                .bind(("permission", self.permission.to_thing()))
+                .await?
+                .check()?);
+
+            Ok(())
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct RevokePermission<'a> {
+    permission: &'a Permission,
+    target: &'a Id,
+    connection: &'a DatabaseConnection,
+}
+
+impl<'a> From<(&'a Permission, &'a Id, &'a DatabaseConnection)> for RevokePermission<'a> {
+    fn from(value: (&'a Permission, &'a Id, &'a DatabaseConnection)) -> Self {
+        Self {
+            permission: value.0,
+            target: value.1,
+            connection: value.2,
+        }
+    }
+}
+
+impl<'a> IntoFuture for RevokePermission<'a> {
+    type Output = Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + Sync + 'a>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(async move {
+            sql_span!(self
+                .connection
+                .query("DELETE FROM has WHERE in=$account AND out=$permission")
+                .bind(("account", self.target.to_thing()))
+                .bind(("permission", self.permission.to_thing()))
+                .await?
+                .check()?);
+
+            Ok(())
+        })
+    }
+}
+
 #[async_trait]
-pub trait GrantPermission {
+pub trait WritePermissions {
     async fn grant_permission(
         &self,
         permission: &Permission,
@@ -71,21 +146,15 @@ pub trait GrantPermission {
     ) -> Result<()>;
 }
 
-impl GrantPermission for Account {
+#[async_trait]
+impl WritePermissions for Account {
     #[instrument(skip(connection))]
     async fn grant_permission(
         &self,
         permission: &Permission,
         connection: &DatabaseConnection,
     ) -> Result<()> {
-        sql_span!(connection
-            .query("RELATE $account->has->$permission")
-            .bind(("account", self.id().to_thing()))
-            .bind(("permission", permission.to_thing()))
-            .await?
-            .check()?);
-
-        Ok(())
+        GrantPermission::from((permission, self.id(), connection)).await
     }
 
     #[instrument(skip(connection))]
@@ -94,25 +163,46 @@ impl GrantPermission for Account {
         permission: &Permission,
         connection: &DatabaseConnection,
     ) -> Result<()> {
-        sql_span!(connection
-            .query("DELETE FROM has WHERE in=$account AND out=$permission")
-            .bind(("account", self.id().to_thing()))
-            .bind(("permission", permission.to_thing()))
-            .await?
-            .check()?);
-
-        Ok(())
+        RevokePermission::from((permission, self.id(), connection)).await
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::auth::authz::{Authorize, WritePermissions};
+    use crate::database::definitions::account::WriteAccount;
+    use crate::prelude::TASK_REQUEST_VIEW;
     use axum::BoxError;
 
     #[tokio::test]
     async fn test_grants() -> Result<(), BoxError> {
         let connection = crate::database::connect().await?;
-        // TODO
+        let account = WriteAccount::from(&connection)
+            .set_first_name(Some("first"))
+            .set_last_name(Some("last"))
+            .set_mail(Some("test@test.de"))
+            .set_password(Some("password".to_owned()))
+            .to_owned()
+            .await?;
+
+        assert!(account
+            .has_permission(&TASK_REQUEST_VIEW, &connection)
+            .await
+            .is_err());
+        account
+            .grant_permission(&TASK_REQUEST_VIEW, &connection)
+            .await?;
+        assert!(account
+            .has_permission(&TASK_REQUEST_VIEW, &connection)
+            .await
+            .is_ok());
+        account
+            .revoke_permission(&TASK_REQUEST_VIEW, &connection)
+            .await?;
+        assert!(account
+            .has_permission(&TASK_REQUEST_VIEW, &connection)
+            .await
+            .is_err());
 
         Ok(())
     }
