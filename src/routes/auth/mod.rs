@@ -113,8 +113,9 @@ async fn logout(
         Some(cookie) => {
             // delete the session
             EndSession::new(account.id(), state.connection()).await?;
+            let cookie = cookie.clone();
 
-            Ok(jar.remove(cookie.clone()))
+            Ok(jar.remove(cookie))
         }
         None => Err(ApplicationError::Unauthorized),
     }
