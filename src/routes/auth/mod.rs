@@ -15,7 +15,7 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-use crate::auth::session::Session;
+use crate::auth::session::{EndSession, Session};
 use crate::auth::Authenticate;
 use crate::database::definitions::account::Account;
 use crate::error::ApplicationErrorResponse;
@@ -24,20 +24,24 @@ use aide::axum::routing::post_with;
 use aide::axum::ApiRouter;
 use aide::transform::TransformOperation;
 use axum::extract::State;
+use axum::Extension;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use axum_extra::extract::CookieJar;
+#[cfg(not(test))]
 use hcaptcha::Hcaptcha;
 
 pub fn router(state: ApplicationState) -> ApiRouter {
     ApiRouter::new()
         .api_route("/login", post_with(login, login_docs))
+        .api_route("/logout", post_with(logout, logout_docs))
         .with_state(state)
 }
 
-#[derive(Deserialize, JsonSchema, Debug, Clone, Hcaptcha)]
+#[derive(Deserialize, JsonSchema, Debug, Clone)]
+#[cfg_attr(not(test), derive(Hcaptcha))]
 pub struct LoginRequest {
-    /// the username
-    username: String,
+    /// the mail
+    mail: String,
     /// the password
     password: String,
     /// the totp token for optional enabled totp authentication
@@ -64,7 +68,7 @@ async fn login(
     data.valid_response(&HCAPTCHA_SECRET, None).await?;
 
     // fetch the account
-    match Account::from_username(data.username.as_str(), state.connection()).await? {
+    match Account::from_mail(data.mail.as_str(), state.connection()).await? {
         Some(account) => {
             // start the login process
             account
@@ -97,4 +101,76 @@ fn login_docs(transform: TransformOperation) -> TransformOperation {
         .summary("Start a new session")
         .response_with::<200, Json<LoginResponse>, _>(|transform| transform.description("Login succeeded"))
         .response_with::<401, Json<ApplicationErrorResponse>, _>(|transform| transform.description("Invalid credentials"))
+}
+
+async fn logout(
+    State(state): State<ApplicationState>,
+    jar: CookieJar,
+    Extension(account): Extension<Account>,
+) -> crate::Result<CookieJar> {
+    // access the cookie
+    match jar.get("session_id") {
+        Some(cookie) => {
+            // delete the session
+            EndSession::new(account.id(), state.connection()).await?;
+
+            Ok(jar.remove(cookie.clone()))
+        }
+        None => Err(ApplicationError::Unauthorized),
+    }
+}
+
+fn logout_docs(transform: TransformOperation) -> TransformOperation {
+    transform
+        .description("Stop the currently active session. This will automatically revoke all tokens and delete the cookie")
+        .summary("Stop the current session")
+        .response_with::<200, Json<LoginResponse>, _>(|transform| transform.description("Logout succeeded"))
+        .response_with::<401, Json<ApplicationErrorResponse>, _>(|transform| transform.description("Invalid cookie"))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::tests::prelude::*;
+    use axum::http::StatusCode;
+    use axum::BoxError;
+
+    #[tokio::test]
+    async fn test_login() -> Result<(), BoxError> {
+        let suite = TestSuite::init().await?;
+
+        let response = suite
+            .client()
+            .post("/auth/login")
+            .json(&json! ({
+                "mail": TEST_MAIL.as_str(),
+                "password": "password"
+            }))
+            .send()
+            .await;
+        assert_eq!(StatusCode::OK, response.status());
+
+        let response = suite
+            .client()
+            .post("/auth/login")
+            .json(&json!({
+                "mail": "somethind different",
+                "password": "password"
+            }))
+            .send()
+            .await;
+        assert_eq!(StatusCode::UNAUTHORIZED, response.status());
+
+        let response = suite
+            .client()
+            .post("/auth/login")
+            .json(&json! {{
+                "mail": TEST_MAIL.as_str(),
+                "password": "wrong"
+            }})
+            .send()
+            .await;
+        assert_eq!(StatusCode::UNAUTHORIZED, response.status());
+
+        Ok(())
+    }
 }

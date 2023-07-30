@@ -49,13 +49,10 @@ pub struct Account {
 
 impl Account {
     #[instrument(skip(connection))]
-    pub async fn from_username(
-        username: &str,
-        connection: &DatabaseConnection,
-    ) -> Result<Option<Account>> {
+    pub async fn from_mail(mail: &str, connection: &DatabaseConnection) -> Result<Option<Account>> {
         let account = sql_span!(connection
-            .query("SELECT * FROM account WHERE username = $username")
-            .bind(("username", username))
+            .query("SELECT * FROM account WHERE mail = $mail")
+            .bind(("mail", mail))
             .await?
             .take::<Option<Account>>(0)?);
 

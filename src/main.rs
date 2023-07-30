@@ -53,8 +53,10 @@ mod error;
 mod routes;
 mod state;
 
-pub async fn router() -> std::result::Result<Router, BoxError> {
-    let connection = database::connect().await?;
+#[cfg(test)]
+mod tests;
+
+pub async fn router(connection: DatabaseConnection) -> std::result::Result<Router, BoxError> {
     let state = ApplicationState::from(connection);
 
     aide::gen::extract_schemas(true);
@@ -97,8 +99,9 @@ async fn main() -> std::result::Result<(), BoxError> {
 
     let address = SocketAddr::from(([0, 0, 0, 0], 8000));
     info!("starting on http://0.0.0.0:8000");
+    let connection = database::connect().await?;
     axum::Server::bind(&address)
-        .serve(router().await?.into_make_service())
+        .serve(router(connection).await?.into_make_service())
         .await
         .unwrap();
 
