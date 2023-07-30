@@ -35,6 +35,8 @@ extern crate serde_json;
 extern crate axum_macros;
 #[macro_use]
 extern crate hcaptcha;
+#[macro_use]
+extern crate yaud_codegen;
 
 use crate::prelude::*;
 use aide::axum::ApiRouter;
@@ -112,6 +114,7 @@ pub mod prelude {
     pub use crate::auth::authz::permission::*;
     pub use crate::database::id::Id;
     pub use crate::database::page::Page;
+    pub use crate::database::relation::Relation;
     pub use crate::database::DatabaseConnection;
     pub use crate::error::*;
     pub use crate::routes::extractor::*;

@@ -15,5 +15,16 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-pub mod account;
-pub mod task;
+use crate::prelude::Id;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum Relation<T>
+where
+    T: Serialize + JsonSchema,
+{
+    ForeignKey(Id),
+    Resolved(T),
+}

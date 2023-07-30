@@ -6,6 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+yaud-codegen = { path = "./yaud-codegen" }
+
 aide = { version = "0.11.0", features = ["redoc", "axum", "axum-extra-cookie", "macros"] }
 axum = { version = "0.6.19", features = ["macros", "multipart"] }
 axum-extra = { version = "0.7.5", features = ["cookie"] }

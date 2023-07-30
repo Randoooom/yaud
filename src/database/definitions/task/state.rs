@@ -15,5 +15,11 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-pub mod account;
-pub mod task;
+use crate::prelude::*;
+
+#[derive(Deserialize, Serialize, JsonSchema, Debug, Clone, PartialEq, Getters)]
+pub struct TaskState {
+    id: Id,
+    title: String,
+    description: String
+}

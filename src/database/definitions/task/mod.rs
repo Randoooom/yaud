@@ -15,5 +15,32 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-pub mod account;
-pub mod task;
+use crate::database::definitions::account::Account;
+use crate::database::definitions::task::state::TaskState;
+use crate::prelude::*;
+use chrono::{DateTime, Utc};
+
+pub mod request;
+pub mod state;
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(untagged)]
+pub enum TaskPriority {
+    Low,
+    Medium,
+    High,
+}
+
+#[derive(Deserialize, Serialize, JsonSchema, Debug, Clone, PartialEq, Getters)]
+#[get = "pub"]
+pub struct Task {
+    id: Id,
+    title: String,
+    customer: Relation<Account>,
+    description: String,
+    due: Option<DateTime<Utc>>,
+    state: TaskState,
+    priority: TaskPriority,
+    updated_at: DateTime<Utc>,
+    created_at: DateTime<Utc>,
+}

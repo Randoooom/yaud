@@ -12,8 +12,31 @@
  *     GNU Affero General Public License for more details.
  *
  *     You should have received a copy of the GNU Affero General Public License
- *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
-pub mod account;
-pub mod task;
+use crate::database::definitions::account::Account;
+use crate::prelude::*;
+use chrono::{DateTime, Utc};
+
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq)]
+pub enum TaskRequestState {
+    Received,
+    Evaluation,
+    Accepted,
+    Rejected,
+}
+
+#[derive(Deserialize, Serialize, JsonSchema, Debug, Clone, PartialEq, Getters, DataWriter)]
+#[writer(table = "task_request")]
+#[get = "pub"]
+pub struct TaskRequest {
+    id: Id,
+    title: String,
+    customer: Relation<Account>,
+    description: String,
+    due: Option<DateTime<Utc>>,
+    state: TaskRequestState,
+    updated_at: DateTime<Utc>,
+    created_at: DateTime<Utc>,
+}

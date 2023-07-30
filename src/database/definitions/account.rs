@@ -25,14 +25,14 @@ use std::future::{Future, IntoFuture};
 use std::pin::Pin;
 use totp_rs::Secret;
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Getters, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Getters, Default, JsonSchema)]
 #[get = "pub"]
 pub struct TotpData {
     active: bool,
     reactivate: bool,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Getters)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Getters, JsonSchema)]
 #[get = "pub"]
 pub struct Account {
     id: Id,
@@ -86,13 +86,10 @@ pub struct WriteAccount<'a> {
     #[serde(skip)]
     #[set = "pub"]
     target: Option<&'a Account>,
-    #[serde(skip_deserializing)]
     #[serde(skip_serializing_if = "Option::is_none")]
     secret: Option<String>,
-    #[serde(skip_deserializing)]
     #[serde(skip_serializing_if = "Option::is_none")]
     nonce: Option<String>,
-    #[serde(skip_deserializing)]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[get_mut = "pub"]
     totp: Option<TotpData>,

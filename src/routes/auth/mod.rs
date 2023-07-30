@@ -20,6 +20,7 @@ use crate::auth::Authenticate;
 use crate::database::definitions::account::Account;
 use crate::error::ApplicationErrorResponse;
 use crate::prelude::{ApplicationError, ApplicationState, Json, DOMAIN, HCAPTCHA_SECRET};
+use crate::require_session;
 use aide::axum::routing::post_with;
 use aide::axum::ApiRouter;
 use aide::transform::TransformOperation;
@@ -33,7 +34,10 @@ use hcaptcha::Hcaptcha;
 pub fn router(state: ApplicationState) -> ApiRouter {
     ApiRouter::new()
         .api_route("/login", post_with(login, login_docs))
-        .api_route("/logout", post_with(logout, logout_docs))
+        .api_route(
+            "/logout",
+            post_with(logout, logout_docs).layer(require_session!(state, PERMISSION_NONE)),
+        )
         .with_state(state)
 }
 
