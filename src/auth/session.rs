@@ -100,6 +100,11 @@ impl Session {
             Err(ApplicationError::Unauthorized)
         }
     }
+
+    #[cfg(test)]
+    pub fn refresh_token(&self) -> String {
+        self.refresh_token.clone()
+    }
 }
 
 #[derive(Clone, Debug)]

@@ -17,9 +17,10 @@
 
 use crate::prelude::*;
 
-#[derive(Deserialize, Serialize, JsonSchema, Debug, Clone, PartialEq, Getters)]
+#[derive(Deserialize, Serialize, JsonSchema, Debug, Clone, PartialEq, Getters, DataWriter)]
+#[writer(table = "task_state")]
 pub struct TaskState {
     id: Id,
     title: String,
-    description: String
+    description: String,
 }

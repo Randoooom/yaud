@@ -34,7 +34,7 @@ macro_rules! require_session {
             mut request: Request<B>,
             next: Next<B>,
         ) -> Response {
-            match jar.get("session") {
+            match jar.get("session_id") {
                 Some(cookie) => {
                     let session_id = cookie.value();
                     let connection = state.connection();

@@ -17,6 +17,7 @@
 
 use crate::database::definitions::account::{Account, WriteAccount};
 use crate::prelude::DatabaseConnection;
+use crate::routes::auth::LoginResponse;
 use axum::BoxError;
 use axum_test_helper::TestClient;
 use lazy_static::lazy_static;
@@ -50,6 +51,20 @@ impl TestSuite {
             connection,
             account,
         })
+    }
+
+    pub async fn authorize_default(&self) -> LoginResponse {
+        let response = self
+            .client
+            .post("/auth/login")
+            .json(&json! ({
+                "mail": TEST_MAIL.as_str(),
+                "password": "password"
+            }))
+            .send()
+            .await;
+
+        response.json::<LoginResponse>().await
     }
 }
 

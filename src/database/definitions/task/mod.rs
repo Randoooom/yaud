@@ -31,7 +31,8 @@ pub enum TaskPriority {
     High,
 }
 
-#[derive(Deserialize, Serialize, JsonSchema, Debug, Clone, PartialEq, Getters)]
+#[derive(Deserialize, Serialize, JsonSchema, Debug, Clone, PartialEq, Getters, DataWriter)]
+#[writer(table = "task")]
 #[get = "pub"]
 pub struct Task {
     id: Id,

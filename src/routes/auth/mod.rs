@@ -31,6 +31,9 @@ use axum_extra::extract::CookieJar;
 #[cfg(not(test))]
 use hcaptcha::Hcaptcha;
 
+pub mod password;
+pub mod totp;
+
 pub fn router(state: ApplicationState) -> ApiRouter {
     ApiRouter::new()
         .api_route("/login", post_with(login, login_docs))
@@ -38,6 +41,12 @@ pub fn router(state: ApplicationState) -> ApiRouter {
             "/logout",
             post_with(logout, logout_docs).layer(require_session!(state, PERMISSION_NONE)),
         )
+        .api_route(
+            "/refresh",
+            post_with(refresh, refresh_docs).layer(require_session!(state, PERMISSION_NONE)),
+        )
+        .nest_api_service("/password", password::router(state.clone()))
+        .nest_api_service("/totp", totp::router(state.clone()))
         .with_state(state)
 }
 
@@ -56,6 +65,7 @@ pub struct LoginRequest {
 }
 
 #[derive(Serialize, JsonSchema, Debug, Clone)]
+#[cfg_attr(test, derive(Deserialize))]
 #[serde(rename_all = "camelCase")]
 pub struct LoginResponse {
     reactivate_totp: bool,
@@ -75,9 +85,7 @@ async fn login(
     match Account::from_mail(data.mail.as_str(), state.connection()).await? {
         Some(account) => {
             // start the login process
-            account
-                .login(data.password.as_str(), data.token.as_deref())
-                .await?;
+            account.login(data.password.as_str(), data.token.as_deref())?;
 
             // start a new session
             let session = account.start_session(state.connection()).await?;
@@ -86,7 +94,6 @@ async fn login(
                 .same_site(SameSite::Strict)
                 .http_only(true)
                 .secure(true)
-                .domain(DOMAIN.as_str())
                 .finish();
             let response = LoginResponse {
                 reactivate_totp: account.totp().reactivate().clone(),
@@ -133,6 +140,51 @@ fn logout_docs(transform: TransformOperation) -> TransformOperation {
         .response_with::<401, Json<ApplicationErrorResponse>, _>(|transform| transform.description("Invalid cookie"))
 }
 
+#[derive(Clone, Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RefreshRequest {
+    #[serde(alias = "refresh_token")]
+    refresh_token: String,
+}
+
+async fn refresh(
+    Extension(session): Extension<Session>,
+    State(state): State<ApplicationState>,
+    jar: CookieJar,
+    Json(data): Json<RefreshRequest>,
+) -> crate::Result<(CookieJar, Json<LoginResponse>)> {
+    // access the cookie
+    match jar.get("session_id") {
+        Some(cookie) => {
+            let mut cookie = cookie.to_owned();
+            // remove the cookie
+            let jar = jar.remove(cookie.clone());
+            // refresh the session
+            let session = session
+                .refresh(data.refresh_token.as_str(), state.connection())
+                .await?;
+            // update the cookie
+            cookie.set_value(session.id.to_string());
+
+            let response = LoginResponse {
+                reactivate_totp: false,
+                session,
+            };
+
+            Ok((jar.add(cookie), Json(response)))
+        }
+        None => Err(ApplicationError::Unauthorized),
+    }
+}
+
+fn refresh_docs(transform: TransformOperation) -> TransformOperation {
+    transform
+        .description("Refresh the current session. This automatically ends the current session and starts a new session")
+        .summary("Refresh the session")
+        .response_with::<200, Json<LoginResponse>, _>(|transform| transform.description("Refresh succeeded"))
+        .response_with::<401, Json<ApplicationErrorResponse>, _>(|transform| transform.description("Invalid cookie"))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::tests::prelude::*;
@@ -175,6 +227,35 @@ mod tests {
             .send()
             .await;
         assert_eq!(StatusCode::UNAUTHORIZED, response.status());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_logout() -> Result<(), BoxError> {
+        let suite = TestSuite::init().await?;
+        suite.authorize_default().await;
+
+        let response = suite.client().post("/auth/logout").send().await;
+        assert_eq!(StatusCode::OK, response.status());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_refresh() -> Result<(), BoxError> {
+        let suite = TestSuite::init().await?;
+        let data = suite.authorize_default().await;
+
+        let response = suite
+            .client()
+            .post("/auth/refresh")
+            .json(&json! ({
+                "refreshToken": data.session.refresh_token()
+            }))
+            .send()
+            .await;
+        assert_eq!(StatusCode::OK, response.status());
 
         Ok(())
     }

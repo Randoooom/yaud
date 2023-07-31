@@ -5,7 +5,7 @@ DEFINE TABLE account SCHEMAFULL;
     DEFINE FIELD password   on TABLE account TYPE string ASSERT $value IS NOT NULL;
     DEFINE FIELD nonce      on TABLE account TYPE string ASSERT $value IS NOT NULL;
     DEFINE FIELD secret     on TABLE account TYPE string ASSERT $value IS NOT NULL;
-    DEFINE FIELD type       on TABLE account TYPE number ASSERT $value IS NOT NULL;
+    DEFINE FIELD type       on TABLE account TYPE string ASSERT $value IS NOT NULL;
     DEFINE FIELD totp       on TABLE account TYPE object ASSERT $value IS NOT NULL;
     DEFINE FIELD totp.active on TABLE account TYPE bool VALUE $value OR FALSE;
     DEFINE FIELD totp.reactivate on TABLE account TYPE bool VALUE $value OR FALSE;
@@ -21,3 +21,26 @@ DEFINE TABLE session SCHEMAFULL;
     DEFINE FIELD iat            on TABLE session TYPE datetime   ASSERT $value IS NOT NULL;
     DEFINE FIELD exp            on TABLE session TYPE datetime   ASSERT $value IS NOT NULL;
     DEFINE FIELD refresh_exp    on TABLE session TYPE datetime   ASSERT $value IS NOT NULL;
+
+DEFINE TABLE task_request SCHEMAFULL;
+    DEFINE FIELD title       on TABLE task_request TYPE string      ASSERT $value IS NOT NULL;
+    DEFINE FIELD customer    on TABLE task_request TYPE string      ASSERT $value IS NOT NULL;
+    DEFINE FIELD description on TABLE task_request TYPE string      ASSERT $value IS NOT NULL;
+    DEFINE FIELD due         on TABLE task_request TYPE datetime;
+    DEFINE FIELD state       on TABLE task_request TYPE string      ASSERT $value IS NOT NULL;
+    DEFINE FIELD updated_at  on TABLE task_request TYPE datetime    VALUE $before OR time::now();
+    DEFINE FIELD created_at  on TABLE task_request TYPE datetime    VALUE $before OR time::now();
+
+DEFINE TABLE task_state SCHEMAFULL;
+    DEFINE FIELD title       on TABLE task_state TYPE string      ASSERT $value IS NOT NULL;
+    DEFINE FIELD description on TABLE task_state TYPE string      ASSERT $value IS NOT NULL;
+
+DEFINE TABLE task SCHEMAFULL;
+    DEFINE FIELD title       on TABLE task TYPE string      ASSERT $value IS NOT NULL;
+    DEFINE FIELD customer    on TABLE task TYPE string      ASSERT $value IS NOT NULL;
+    DEFINE FIELD description on TABLE task TYPE string      ASSERT $value IS NOT NULL;
+    DEFINE FIELD due         on TABLE task TYPE datetime;
+    DEFINE FIELD state       on TABLE task TYPE string      ASSERT $value IS NOT NULL;
+    DEFINE FIELD priority    on TABLE task TYPE string      ASSERT $value IS NOT NULL;
+    DEFINE FIELD updated_at  on TABLE task TYPE datetime    VALUE $before OR time::now();
+    DEFINE FIELD created_at  on TABLE task TYPE datetime    VALUE $before OR time::now();

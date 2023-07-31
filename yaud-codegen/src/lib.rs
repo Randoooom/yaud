@@ -85,6 +85,7 @@ pub fn data_writer_macro_derive(input: TokenStream) -> TokenStream {
             type Output = Result<#input_ident>;
             type IntoFuture = std::pin::Pin<Box<dyn std::future::Future<Output = Self::Output> + Send + Sync + 'a>>;
 
+            #[instrument(skip_all)]
             fn into_future(self) -> Self::IntoFuture {
                 Box::pin(async move {
                     let result: #input_ident = if let Some(target) = self.target {

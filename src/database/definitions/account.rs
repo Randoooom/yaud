@@ -15,7 +15,7 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-use crate::auth::DeriveEncryptionKey;
+use crate::auth::{Authenticate, DeriveEncryptionKey};
 use crate::prelude::*;
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::SaltString;
@@ -78,9 +78,10 @@ pub struct WriteAccount<'a> {
     #[set = "pub"]
     #[serde(skip_serializing_if = "Option::is_none")]
     password: Option<String>,
-    #[set = "pub"]
     #[serde(skip)]
     old_password: Option<&'a str>,
+    #[serde(skip)]
+    token: Option<&'a str>,
     #[serde(skip)]
     connection: &'a DatabaseConnection,
     #[serde(skip)]
@@ -108,6 +109,7 @@ impl<'a> From<&'a DatabaseConnection> for WriteAccount<'a> {
             nonce: None,
             totp: None,
             old_password: None,
+            token: None,
         }
     }
 }
@@ -125,6 +127,17 @@ impl<'a> WriteAccount<'a> {
 
         self
     }
+
+    pub fn authenticate(
+        &mut self,
+        password: &'a str,
+        token: Option<&'a str>,
+    ) -> &mut WriteAccount<'a> {
+        self.token = token;
+        self.old_password = Some(password);
+
+        self
+    }
 }
 
 impl<'a> IntoFuture for WriteAccount<'a> {
@@ -138,13 +151,8 @@ impl<'a> IntoFuture for WriteAccount<'a> {
             if self.password.is_some() {
                 if let Some(account) = &self.target {
                     if let Some(old_password) = &self.old_password {
-                        // derive the key
-                        let key = account.derive_key(old_password)?;
-                        // compare the hashes
-                        Argon2::default().verify_password(
-                            &key,
-                            &PasswordHash::new(account.password().as_str())?,
-                        )?;
+                        // verify the credentials
+                        account.login(old_password, self.token)?;
                     } else {
                         return Err(ApplicationError::Unauthorized);
                     }

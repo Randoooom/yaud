@@ -83,7 +83,7 @@ impl DeriveEncryptionKey for Account {
 
 #[async_trait]
 pub trait Authenticate {
-    async fn login(&self, password: &str, token: Option<&str>) -> Result<()>;
+    fn login(&self, password: &str, token: Option<&str>) -> Result<()>;
     async fn logout(&self, connection: &DatabaseConnection) -> Result<()>;
     async fn start_session(&self, connection: &DatabaseConnection) -> Result<Session>;
 }
@@ -91,7 +91,7 @@ pub trait Authenticate {
 #[async_trait]
 impl Authenticate for Account {
     #[instrument(skip_all)]
-    async fn login(&self, password: &str, token: Option<&str>) -> Result<()> {
+    fn login(&self, password: &str, token: Option<&str>) -> Result<()> {
         // try to derive the key
         let key = self.derive_key(password)?;
         // compare the hashes
@@ -154,9 +154,9 @@ mod tests {
             .to_owned()
             .await?;
 
-        assert!(account.login("password", None).await.is_ok());
-        assert!(account.login("password1", None).await.is_err());
-        assert!(account.login("password", Some("123456")).await.is_ok());
+        assert!(account.login("password", None).is_ok());
+        assert!(account.login("password1", None).is_err());
+        assert!(account.login("password", Some("123456")).is_ok());
 
         assert!(WriteAccount::from(&connection)
             .set_target(Some(&account))
@@ -167,11 +167,11 @@ mod tests {
         let account = WriteAccount::from(&connection)
             .set_target(Some(&account))
             .set_password(Some("different".to_owned()))
-            .set_old_password(Some("password"))
+            .authenticate("password", None)
             .to_owned()
             .await?;
-        assert!(account.login("different", None).await.is_ok());
-        assert!(account.login("password", None).await.is_err());
+        assert!(account.login("different", None).is_ok());
+        assert!(account.login("password", None).is_err());
 
         let account = WriteAccount::from(&connection)
             .set_target(Some(&account))
@@ -193,20 +193,13 @@ mod tests {
         let token = totp.generate_current().unwrap();
         let invalid_token =
             totp.generate((Local::now() - Duration::seconds(300)).timestamp() as u64);
-        assert!(account.login("different", None).await.is_err());
-        assert!(account.login("different", Some("123456")).await.is_err());
+        assert!(account.login("different", None).is_err());
+        assert!(account.login("different", Some("123456")).is_err());
         assert!(account
             .login("different", Some(invalid_token.as_str()))
-            .await
             .is_err());
-        assert!(account
-            .login("different", Some(token.as_str()))
-            .await
-            .is_ok());
-        assert!(account
-            .login("password", Some(token.as_str()))
-            .await
-            .is_err());
+        assert!(account.login("different", Some(token.as_str())).is_ok());
+        assert!(account.login("password", Some(token.as_str())).is_err());
 
         Ok(())
     }
