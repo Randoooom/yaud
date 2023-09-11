@@ -84,8 +84,6 @@ pub async fn connect() -> Result<ConnectionInfo> {
     // execute the up queries
     client.query(include_str!("./up.surrealql")).await?;
     info!("Initiated tables");
-    // initialize the permissions
-    PermissionHandler::from(&client).await?;
 
     Ok(ConnectionInfo {
         database,

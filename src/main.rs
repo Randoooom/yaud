@@ -74,8 +74,4 @@ pub mod prelude {
     pub use crate::database::DatabaseConnection;
     pub use crate::error::*;
     pub use crate::state::*;
-
-    lazy_static::lazy_static! {
-        pub static ref DOMAIN: String = std::env::var("DOMAIN").expect("DOMAIN NOT FOUND");
-    }
 }
