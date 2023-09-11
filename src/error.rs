@@ -18,8 +18,9 @@
 use crate::prelude::*;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use axum::Json;
 
-#[derive(Error, Debug, OperationIo)]
+#[derive(Error, Debug)]
 pub enum ApplicationError {
     #[error("Unauthorized")]
     Unauthorized,
@@ -35,11 +36,6 @@ pub enum ApplicationError {
     InternalServerError,
     #[error(transparent)]
     IoError(#[from] std::io::Error),
-}
-
-#[derive(Serialize, Debug, JsonSchema)]
-pub struct ApplicationErrorResponse {
-    error: String,
 }
 
 pub type Result<T> = std::result::Result<T, ApplicationError>;

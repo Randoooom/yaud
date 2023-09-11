@@ -16,11 +16,8 @@
  */
 
 use crate::prelude::*;
-use aide::axum::ApiRouter;
+use axum::http::StatusCode;
 
-pub mod extractor;
-pub mod openapi;
-
-pub fn router(state: ApplicationState) -> ApiRouter {
-    ApiRouter::new().with_state(state)
+pub async fn hook() -> Result<StatusCode> {
+    Ok(StatusCode::OK)
 }

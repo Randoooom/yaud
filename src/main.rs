@@ -18,10 +18,6 @@
 #[macro_use]
 extern crate serde;
 #[macro_use]
-extern crate schemars;
-#[macro_use]
-extern crate aide;
-#[macro_use]
 extern crate thiserror;
 #[macro_use]
 extern crate getset;
@@ -29,24 +25,18 @@ extern crate getset;
 extern crate tracing;
 #[macro_use]
 extern crate serde_json;
-#[macro_use]
-extern crate axum_macros;
 
 use crate::database::ConnectionInfo;
 use crate::prelude::*;
-use aide::axum::ApiRouter;
-use aide::openapi::OpenApi;
-use axum::http::{header, Method};
-use axum::{BoxError, Extension, Router};
+use axum::{BoxError, Router};
 use std::net::SocketAddr;
-use std::sync::Arc;
-use tower_http::cors::CorsLayer;
+use tower_http::trace::TraceLayer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 mod database;
 mod error;
-mod routes;
+mod hook;
 mod state;
 
 #[cfg(test)]
@@ -55,37 +45,13 @@ mod tests;
 pub async fn router(connection: ConnectionInfo) -> std::result::Result<Router, BoxError> {
     let state = ApplicationState::from(connection);
 
-    aide::gen::extract_schemas(true);
-    let mut api = OpenApi::default();
-
-    Ok(ApiRouter::new()
-        .nest_api_service("/docs", routes::openapi::router(state.clone()))
-        .nest_api_service("/", routes::router(state))
-        .finish_api_with(&mut api, routes::openapi::transform_api)
-        .layer(
-            CorsLayer::new()
-                .allow_origin([DOMAIN.parse().unwrap()])
-                .allow_methods(vec![
-                    Method::GET,
-                    Method::POST,
-                    Method::PUT,
-                    Method::DELETE,
-                    Method::HEAD,
-                    Method::OPTIONS,
-                ])
-                .allow_headers(vec![
-                    header::AUTHORIZATION,
-                    header::CONTENT_TYPE,
-                    header::CONTENT_DISPOSITION,
-                ])
-                .expose_headers(vec![header::CONTENT_DISPOSITION]),
-        )
-        .layer(Extension(Arc::new(api))))
+    Ok(Router::new()
+        .layer(TraceLayer::new_for_http())
+        .with_state(state))
 }
 
 #[tokio::main]
 async fn main() -> std::result::Result<(), BoxError> {
-    let _ = std::env::var("HCAPTCHA_SECRET").expect("HCAPTCHA_SECRET NOT FOUND");
     let _ = std::env::var("DOMAIN").expect("DOMAIN NOT FOUND");
 
     tracing_subscriber::registry()
@@ -107,7 +73,6 @@ async fn main() -> std::result::Result<(), BoxError> {
 pub mod prelude {
     pub use crate::database::DatabaseConnection;
     pub use crate::error::*;
-    pub use crate::routes::extractor::*;
     pub use crate::state::*;
 
     lazy_static::lazy_static! {
