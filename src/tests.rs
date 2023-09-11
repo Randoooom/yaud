@@ -15,8 +15,9 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+use crate::auth::authz::WritePermissions;
 use crate::database::definitions::account::{Account, WriteAccount};
-use crate::prelude::DatabaseConnection;
+use crate::prelude::{DatabaseConnection, PERMISSIONS};
 use crate::routes::auth::LoginResponse;
 use axum::BoxError;
 use axum_test_helper::TestClient;
@@ -36,8 +37,10 @@ pub struct TestSuite {
 
 impl TestSuite {
     pub async fn init() -> Result<Self, BoxError> {
-        let connection = crate::database::connect().await?;
-        let client = TestClient::new(crate::router(connection.clone()).await?);
+        let connection_info = crate::database::connect().await?;
+        let client = TestClient::new(crate::router(connection_info.clone()).await?);
+        let connection = connection_info.connection;
+
         let account = WriteAccount::from(&connection)
             .set_first_name(Some("first"))
             .set_last_name(Some("last"))
@@ -45,6 +48,11 @@ impl TestSuite {
             .set_password(Some("password".to_owned()))
             .to_owned()
             .await?;
+
+        // grant all permissions
+        for permission in PERMISSIONS.iter() {
+            account.grant_permission(permission, &connection).await?;
+        }
 
         Ok(Self {
             client,
@@ -71,4 +79,67 @@ impl TestSuite {
 pub mod prelude {
     pub use crate::tests::TestSuite;
     pub use crate::tests::TEST_MAIL;
+}
+
+#[cfg(test)]
+mod reproduce {
+    use axum::BoxError;
+    use surrealdb::opt::RecordId;
+    use surrealdb::opt::Resource::RecordId;
+    use surrealdb::sql::Thing;
+
+    #[tokio::test]
+    async fn reproduce() -> Result<(), BoxError> {
+        let connection = &crate::database::connect().await?.connection;
+
+        #[derive(Deserialize, Serialize, Debug, Clone)]
+        struct Person {
+            id: Thing,
+            name: String,
+        }
+
+        #[derive(Deserialize, Serialize, Debug, Clone)]
+        struct Note {
+            id: Thing,
+            content: String,
+            owner: Thing,
+        }
+
+        connection
+            .query("DEFINE TABLE person SCHEMAFULL")
+            .query("DEFINE FIELD name ON TABLE person TYPE string ASSERT $value IS NOT NULL")
+            .query("DEFINE TABLE note SCHEMAFULL")
+            .query("DEFINE FIELD content ON TABLE note TYPE string ASSERT $value IS NOT NULL")
+            .query("DEFINE FIELD owner ON TABLE note TYPE record(person) ASSERT $value IS NOT NULL")
+            .await?
+            .check()?;
+
+        let person: Person = connection
+            .create(("person", "john"))
+            .content(json! ({
+               "name": "john"
+            }))
+            .await?
+            .unwrap();
+
+        // doesn't work
+        let note: Vec<Note> = connection
+            .create("note")
+            .content(json! ({
+               "content": "insert here",
+                "owner": RecordId::from(person.id.clone())
+            }))
+            .await?;
+
+        // also doesn't work
+        let note: Vec<Note> = connection
+            .create("note")
+            .content(json! ({
+               "content": "insert here",
+                "owner": "person:john"
+            }))
+            .await?;
+
+        Ok(())
+    }
 }

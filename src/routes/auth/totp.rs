@@ -83,7 +83,7 @@ fn get_qr_code_docs(transform: TransformOperation) -> TransformOperation {
         })
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, JsonSchema)]
 struct ToggleRequest {
     password: String,
     token: String,

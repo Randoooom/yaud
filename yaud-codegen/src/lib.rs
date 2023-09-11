@@ -17,18 +17,31 @@
 
 #[macro_use]
 extern crate quote;
-#[macro_use]
 extern crate darling;
 
-use darling::FromDeriveInput;
+use darling::{FromDeriveInput, FromField};
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, Data, DeriveInput, Type};
+use syn::{parse_macro_input, Data, DeriveInput, Path, Type};
 
-#[derive(FromDeriveInput)]
+#[derive(Debug, FromDeriveInput)]
 #[darling(attributes(writer))]
 struct DataWriterOptions {
     name: Option<String>,
     table: String,
+    #[darling(default)]
+    impl_full_request: bool,
+}
+
+#[derive(Debug, FromField)]
+#[darling(attributes(writer))]
+struct DataWriterFieldOptions {
+    #[darling(default)]
+    skip: bool,
+    #[darling(default)]
+    skip_full: bool,
+    full: Option<Path>,
+    #[darling(default)]
+    editable: bool,
 }
 
 #[proc_macro_derive(DataWriter, attributes(writer))]
@@ -48,12 +61,98 @@ pub fn data_writer_macro_derive(input: TokenStream) -> TokenStream {
         Data::Struct(data) => data.fields,
         _ => panic!("Expected struct"),
     };
+
     let mut field_names = Vec::<syn::Ident>::new();
     let mut field_types = Vec::<Type>::new();
+
+    let mut full_field_names = Vec::<syn::Ident>::new();
+    let mut full_field_types = Vec::<Type>::new();
+
+    let mut full_field_default_names = Vec::<syn::Ident>::new();
+    let mut full_field_default_path = Vec::<syn::Path>::new();
+
+    let mut editable_field_names = Vec::<syn::Ident>::new();
+    let mut editable_field_types = Vec::<Type>::new();
+    let mut editable_field_setter = Vec::<syn::Ident>::new();
+
     fields.into_iter().for_each(|field| {
-        field_names.push(field.ident.unwrap());
-        field_types.push(field.ty);
+        let options = DataWriterFieldOptions::from_field(&field).unwrap();
+
+        if !options.skip {
+            field_names.push(field.clone().ident.unwrap());
+            field_types.push(field.clone().ty);
+
+            if !options.skip_full {
+                if let Some(path) = options.full {
+                    full_field_default_names.push(field.clone().ident.unwrap());
+                    full_field_default_path.push(path);
+                } else {
+                    full_field_names.push(field.clone().ident.unwrap());
+                    full_field_types.push(field.clone().ty);
+                }
+            }
+
+            if options.editable {
+                editable_field_setter.push(format_ident!("set_{}", field.ident.as_ref().unwrap()));
+                editable_field_names.push(field.ident.unwrap());
+                editable_field_types.push(field.ty);
+            }
+        }
     });
+
+    let full_request = if options.impl_full_request && !full_field_names.is_empty() {
+        let full_request = format_ident!("{}Request", &writer_ident);
+
+        quote! {
+            #[derive(Deserialize, Clone, Debug, JsonSchema)]
+            pub struct #full_request {
+                #(
+                    pub #full_field_names: #full_field_types,
+                )*
+            }
+
+            impl<'a> #writer_ident<'a> {
+                pub fn with_request(&mut self, request: #full_request) -> &mut Self {
+                    #(
+                      self.#full_field_names = Some(request.#full_field_names);
+                    )*
+
+                    #(
+                      self.#full_field_default_names = Some(#full_field_default_path);
+                    )*
+
+                    self
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let editable = if !editable_field_names.is_empty() {
+        let editable_ident = format_ident!("Edit{}", input_ident);
+
+        quote! {
+            #[derive(Deserialize, Debug, Clone, JsonSchema)]
+            pub struct #editable_ident {
+                #(
+                  #editable_field_names: Option<#editable_field_types>,
+                )*
+            }
+
+            impl #editable_ident {
+                pub fn to_writer(self, connection: &DatabaseConnection) -> #writer_ident {
+                    #writer_ident::from(connection)
+                        #(
+                            .#editable_field_setter(self.#editable_field_names)
+                        )*
+                        .to_owned()
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
 
     let expanded = quote! {
         #[derive(Clone, Serialize, Getters, Setters)]
@@ -94,9 +193,10 @@ pub fn data_writer_macro_derive(input: TokenStream) -> TokenStream {
                                 .update(target.to_thing())
                                 .merge(self)
                                 .await?
+                                .unwrap()
                         )
                     } else {
-                        sql_span!(self.connection.create(#table).content(self).await?)
+                        sql_span!(self.connection.create(#table).content(self).await?.into_iter().next().unwrap())
                     };
 
                     Ok(result)
@@ -104,6 +204,9 @@ pub fn data_writer_macro_derive(input: TokenStream) -> TokenStream {
             }
         }
 
+        #full_request
+
+        #editable
     };
 
     expanded.into()

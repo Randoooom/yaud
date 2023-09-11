@@ -15,11 +15,11 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-use crate::auth::{Authenticate, DeriveEncryptionKey};
+use crate::auth::Authenticate;
 use crate::prelude::*;
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::SaltString;
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
+use argon2::{Argon2, PasswordHasher};
 use chrono::{DateTime, Utc};
 use std::future::{Future, IntoFuture};
 use std::pin::Pin;
@@ -193,14 +193,21 @@ impl<'a> IntoFuture for WriteAccount<'a> {
 
             // other fields don't really matter here so we can proceed with merging the data
             let account: Account = if let Some(target) = self.target {
-                sql_span!(
-                    self.connection
-                        .update(target.id.to_thing())
-                        .merge(self)
-                        .await?
-                )
+                sql_span!(self
+                    .connection
+                    .update(target.id.to_thing())
+                    .merge(self)
+                    .await?
+                    .unwrap())
             } else {
-                sql_span!(self.connection.create("account").content(self).await?)
+                sql_span!(self
+                    .connection
+                    .create("account")
+                    .content(self)
+                    .await?
+                    .into_iter()
+                    .next()
+                    .unwrap())
             };
 
             Ok(account)
@@ -215,7 +222,7 @@ mod test {
 
     #[tokio::test]
     async fn test_write() -> Result<(), BoxError> {
-        let connection = crate::database::connect().await?;
+        let connection = crate::database::connect().await?.connection;
 
         let account = WriteAccount::from(&connection)
             .set_first_name(Some("first name"))

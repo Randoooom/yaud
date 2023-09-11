@@ -145,7 +145,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_login() -> Result<(), BoxError> {
-        let connection = crate::database::connect().await?;
+        let connection = crate::database::connect().await?.connection;
         let account = WriteAccount::from(&connection)
             .set_first_name(Some("first"))
             .set_last_name(Some("last"))

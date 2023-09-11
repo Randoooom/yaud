@@ -34,7 +34,14 @@ const SURREALDB_PASSWORD: &str = "SURREALDB_PASSWORD";
 
 pub type DatabaseConnection = Surreal<Client>;
 
-pub async fn connect() -> Result<DatabaseConnection> {
+#[derive(Debug, Clone)]
+pub struct ConnectionInfo {
+    pub connection: DatabaseConnection,
+    pub database: String,
+    pub namespace: String,
+}
+
+pub async fn connect() -> Result<ConnectionInfo> {
     // establish the connection
     let client: Surreal<Client> = Surreal::new::<Ws>(
         std::env::var(SURREALDB_ENDPOINT)
@@ -56,23 +63,25 @@ pub async fn connect() -> Result<DatabaseConnection> {
         .await?;
     info!("Authenticated with surrealdb");
 
-    // use namespace and database
-    cfg_if::cfg_if! {
-        if #[cfg(test)] {
-            let db = nanoid::nanoid!();
-            println!("Connected with database {:?} in namespace \"test\"", db);
+    #[cfg(not(test))]
+    let database = "yaud".to_owned();
+    #[cfg(not(test))]
+    let namespace = "production".to_owned();
 
-            client
-                .use_ns("test")
-                .use_db(db)
-                .await?;
-        } else {
-            client
-                .use_ns("production")
-                .use_db("yaud")
-                .await?;
-        }
-    }
+    #[cfg(test)]
+    let database = nanoid::nanoid!();
+    #[cfg(test)]
+    let namespace = "test".to_owned();
+    #[cfg(test)]
+    println!(
+        "Connected with database {:?} in namespace \"test\"",
+        database
+    );
+
+    client
+        .use_ns(namespace.as_str())
+        .use_db(database.as_str())
+        .await?;
 
     // perform the migrations
     #[cfg(not(test))]
@@ -83,7 +92,11 @@ pub async fn connect() -> Result<DatabaseConnection> {
     // initialize the permissions
     PermissionHandler::from(&client).await?;
 
-    Ok(client)
+    Ok(ConnectionInfo {
+        database,
+        namespace,
+        connection: client,
+    })
 }
 
 #[cfg(not(test))]

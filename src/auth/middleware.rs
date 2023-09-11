@@ -43,7 +43,8 @@ macro_rules! require_session {
                     // verify the session
                     if let Ok(session) = Session::validate_session(session_id, connection).await {
                         // fetch the account
-                        let account: Account = connection.select(session.target()).await.unwrap();
+                        let account: Account =
+                            connection.select(session.target()).await.unwrap().unwrap();
 
                         // handle the permissions
                         if account
@@ -52,6 +53,12 @@ macro_rules! require_session {
                             .is_ok()
                         {
                             extensions.insert(account);
+                            extensions.insert(
+                                session
+                                    .start_database_session(state.connection_info())
+                                    .await
+                                    .unwrap(),
+                            );
                             extensions.insert(session);
 
                             return next.run(request).await;

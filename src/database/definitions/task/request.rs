@@ -28,15 +28,23 @@ pub enum TaskRequestState {
 }
 
 #[derive(Deserialize, Serialize, JsonSchema, Debug, Clone, PartialEq, Getters, DataWriter)]
-#[writer(table = "task_request")]
+#[writer(table = "task_request", impl_full_request)]
 #[get = "pub"]
 pub struct TaskRequest {
+    #[writer(skip)]
     id: Id,
+    #[writer(editable)]
     title: String,
+    #[writer(skip_full)]
     customer: Relation<Account>,
+    #[writer(editable)]
     description: String,
-    due: Option<DateTime<Utc>>,
+    #[writer(editable)]
+    due: DateTime<Utc>,
+    #[writer(full = "TaskRequestState::Received")]
     state: TaskRequestState,
+    #[writer(skip_full)]
     updated_at: DateTime<Utc>,
+    #[writer(skip)]
     created_at: DateTime<Utc>,
 }

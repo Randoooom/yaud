@@ -15,6 +15,8 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+use crate::database::definitions::account::Account;
+use crate::database::ConnectionInfo;
 use crate::prelude::*;
 use chrono::{DateTime, Duration, Utc};
 use std::future::{Future, IntoFuture};
@@ -80,7 +82,7 @@ impl Session {
     /// Ends the given session
     #[instrument(skip_all)]
     pub async fn end(&self, connection: &DatabaseConnection) -> Result<()> {
-        let _: Session = sql_span!(connection.delete(&self.id).await?);
+        let _: Option<Session> = sql_span!(connection.delete(&self.id).await?);
 
         Ok(())
     }
@@ -104,6 +106,17 @@ impl Session {
     #[cfg(test)]
     pub fn refresh_token(&self) -> String {
         self.refresh_token.clone()
+    }
+
+    #[instrument(skip_all)]
+    pub async fn start_database_session(
+        &self,
+        info: &ConnectionInfo,
+    ) -> Result<DatabaseConnection> {
+        let connection = info.connection.clone();
+        connection.set("issuer", self.id.to_thing()).await?;
+
+        Ok(connection)
     }
 }
 
@@ -165,21 +178,39 @@ impl<'a> IntoFuture for WriteSession<'a> {
             let refresh_token = nanoid::nanoid!(64, &ALPHABET);
 
             // end currently active sessions for the target
-            EndSession::new(&self.target, self.connection).await?;
+            EndSession::new(self.target, self.connection).await?;
 
-            Ok(sql_span!(
-                self.connection
-                    .create(id.to_thing())
-                    .content(&Session {
-                        id,
-                        target: self.target.clone(),
-                        iat,
-                        exp,
-                        refresh_token,
-                        refresh_exp,
-                    })
-                    .await?
-            ))
+            // Ok(sql_span!(self
+            //     .connection
+            //     .create(id.to_thing())
+            //     .content(&Session {
+            //         id,
+            //         target: self.target.clone(),
+            //         iat,
+            //         exp,
+            //         refresh_token,
+            //         refresh_exp,
+            //     })
+            //     .await?
+            //     .unwrap()))
+            let account = self
+                .connection
+                .select::<Option<Account>>(self.target)
+                .await?
+                .unwrap();
+
+            Ok(sql_span!(self
+                .connection
+                .create(id.to_thing())
+                .content(&json! ({
+                    "target": account,
+                    "iat": iat,
+                    "exp": exp,
+                    "refresh_token": refresh_token,
+                    "refresh_exp": refresh_exp
+                }))
+                .await?
+                .unwrap()))
         })
     }
 }
@@ -187,12 +218,14 @@ impl<'a> IntoFuture for WriteSession<'a> {
 #[cfg(test)]
 mod tests {
     use crate::auth::session::{Session, WriteSession};
+    use crate::database::definitions::account::WriteAccount;
     use crate::prelude::Id;
+    use crate::tests::TEST_MAIL;
     use axum::BoxError;
 
     #[tokio::test]
     async fn test_session_start() -> Result<(), BoxError> {
-        let connection = crate::database::connect().await?;
+        let connection = crate::database::connect().await?.connection;
         WriteSession::new(&Id::new(("account", "test")), &connection).await?;
 
         Ok(())
@@ -200,9 +233,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_session_validation() -> Result<(), BoxError> {
-        let connection = crate::database::connect().await?;
+        let connection = crate::database::connect().await?.connection;
+        let account = WriteAccount::from(&connection)
+            .set_first_name(Some("first"))
+            .set_last_name(Some("last"))
+            .set_mail(Some(TEST_MAIL.as_str()))
+            .set_password(Some("password".to_owned()))
+            .to_owned()
+            .await?;
 
-        let session = WriteSession::new(&Id::new(("account", "test")), &connection).await?;
+        let session = WriteSession::new(account.id(), &connection).await?;
         assert!(session.is_valid(&connection).await.is_ok());
         let cloned_session = session.clone();
 

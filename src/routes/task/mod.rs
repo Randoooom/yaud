@@ -15,23 +15,13 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-use crate::database::ConnectionInfo;
 use crate::prelude::*;
+use aide::axum::ApiRouter;
 
-#[derive(Clone, Getters)]
-#[get = "pub"]
-pub struct ApplicationState {
-    connection_info: ConnectionInfo,
-}
+pub mod request;
 
-impl From<ConnectionInfo> for ApplicationState {
-    fn from(connection_info: ConnectionInfo) -> Self {
-        Self { connection_info }
-    }
-}
-
-impl ApplicationState {
-    pub fn connection(&self) -> &DatabaseConnection {
-        &self.connection_info.connection
-    }
+pub fn router(state: ApplicationState) -> ApiRouter {
+    ApiRouter::new()
+        .nest_api_service("/request", request::router(state.clone()))
+        .with_state(state)
 }

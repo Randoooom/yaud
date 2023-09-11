@@ -20,6 +20,7 @@ use crate::prelude::*;
 #[derive(Deserialize, Serialize, JsonSchema, Debug, Clone, PartialEq, Getters, DataWriter)]
 #[writer(table = "task_state")]
 pub struct TaskState {
+    #[writer(skip)]
     id: Id,
     title: String,
     description: String,

@@ -123,7 +123,10 @@ where
                     format!("{} {}", self.query, limit)
                 }
             };
-            let count_query = format!("SELECT * FROM count(({}))", self.query);
+            let count_query = format!(
+                "SELECT * FROM count(({}))",
+                self.query.split("%%%").next().unwrap()
+            );
 
             // setup the database request
             let mut request = self.connection.query(count_query).query(query);
@@ -158,7 +161,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_paging() -> Result<(), BoxError> {
-        let connection = crate::database::connect().await?;
+        let connection = crate::database::connect().await?.connection;
         connection
             .query("DEFINE TABLE test SCHEMALESS;")
             .await?

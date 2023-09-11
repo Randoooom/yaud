@@ -38,6 +38,7 @@ extern crate hcaptcha;
 #[macro_use]
 extern crate yaud_codegen;
 
+use crate::database::ConnectionInfo;
 use crate::prelude::*;
 use aide::axum::ApiRouter;
 use aide::openapi::OpenApi;
@@ -58,7 +59,7 @@ mod state;
 #[cfg(test)]
 mod tests;
 
-pub async fn router(connection: DatabaseConnection) -> std::result::Result<Router, BoxError> {
+pub async fn router(connection: ConnectionInfo) -> std::result::Result<Router, BoxError> {
     let state = ApplicationState::from(connection);
 
     aide::gen::extract_schemas(true);

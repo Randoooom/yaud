@@ -19,7 +19,7 @@ use crate::auth::session::{EndSession, Session};
 use crate::auth::Authenticate;
 use crate::database::definitions::account::Account;
 use crate::error::ApplicationErrorResponse;
-use crate::prelude::{ApplicationError, ApplicationState, Json, DOMAIN, HCAPTCHA_SECRET};
+use crate::prelude::{ApplicationError, ApplicationState, Json, HCAPTCHA_SECRET};
 use crate::require_session;
 use aide::axum::routing::post_with;
 use aide::axum::ApiRouter;
@@ -94,6 +94,7 @@ async fn login(
                 .same_site(SameSite::Strict)
                 .http_only(true)
                 .secure(true)
+                .path("/")
                 .finish();
             let response = LoginResponse {
                 reactivate_totp: account.totp().reactivate().clone(),

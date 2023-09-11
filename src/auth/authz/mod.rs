@@ -42,12 +42,14 @@ impl Authorize for Account {
         if permission.eq(&PERMISSION_NONE) {
             Ok(())
         } else {
-            let result = sql_span!(connection
-            .query("select $permission INSIDE ->has->permission.id as result from $account",)
-            .bind(("permission", permission.to_thing()))
-            .bind(("account", self.id().to_thing()))
-            .await?)
-            .take::<Option<bool>>((0, "result"))?
+            let result = sql_span!(
+                connection
+                    .query("select * from fn::has_permission($account, $permission)",)
+                    .bind(("permission", permission.to_thing()))
+                    .bind(("account", self.id().to_thing()))
+                    .await?
+            )
+            .take::<Option<bool>>(0)?
             .unwrap();
 
             if result {
@@ -176,7 +178,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_grants() -> Result<(), BoxError> {
-        let connection = crate::database::connect().await?;
+        let connection = crate::database::connect().await?.connection;
         let account = WriteAccount::from(&connection)
             .set_first_name(Some("first"))
             .set_last_name(Some("last"))

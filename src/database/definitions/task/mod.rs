@@ -35,13 +35,17 @@ pub enum TaskPriority {
 #[writer(table = "task")]
 #[get = "pub"]
 pub struct Task {
+    #[writer(skip)]
     id: Id,
     title: String,
+    #[writer(skip_full)]
     customer: Relation<Account>,
     description: String,
-    due: Option<DateTime<Utc>>,
+    due: DateTime<Utc>,
     state: TaskState,
     priority: TaskPriority,
+    #[writer(skip_full)]
     updated_at: DateTime<Utc>,
+    #[writer(skip)]
     created_at: DateTime<Utc>,
 }

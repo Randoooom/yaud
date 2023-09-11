@@ -29,6 +29,15 @@ pub struct Id {
     pub id: String,
 }
 
+impl From<Thing> for Id {
+    fn from(thing: Thing) -> Self {
+        Self {
+            table: thing.tb,
+            id: thing.id.to_string(),
+        }
+    }
+}
+
 impl TryFrom<(&str, &str)> for Id {
     type Error = ApplicationError;
 
