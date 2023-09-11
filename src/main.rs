@@ -20,8 +20,6 @@ extern crate serde;
 #[macro_use]
 extern crate schemars;
 #[macro_use]
-extern crate async_trait;
-#[macro_use]
 extern crate aide;
 #[macro_use]
 extern crate thiserror;
@@ -33,10 +31,6 @@ extern crate tracing;
 extern crate serde_json;
 #[macro_use]
 extern crate axum_macros;
-#[macro_use]
-extern crate hcaptcha;
-#[macro_use]
-extern crate yaud_codegen;
 
 use crate::database::ConnectionInfo;
 use crate::prelude::*;
@@ -50,7 +44,6 @@ use tower_http::cors::CorsLayer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-mod auth;
 mod database;
 mod error;
 mod routes;
@@ -112,18 +105,12 @@ async fn main() -> std::result::Result<(), BoxError> {
 }
 
 pub mod prelude {
-    pub use crate::auth::authz::permission::*;
-    pub use crate::database::id::Id;
-    pub use crate::database::page::Page;
-    pub use crate::database::relation::Relation;
     pub use crate::database::DatabaseConnection;
     pub use crate::error::*;
     pub use crate::routes::extractor::*;
     pub use crate::state::*;
-    pub use crate::{require_session, sql_span};
 
     lazy_static::lazy_static! {
-        pub static ref HCAPTCHA_SECRET: String = std::env::var("HCAPTCHA_SECRET").expect("HCAPTCHA_SECRET NOT FOUND");
         pub static ref DOMAIN: String = std::env::var("DOMAIN").expect("DOMAIN NOT FOUND");
     }
 }

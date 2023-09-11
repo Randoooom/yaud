@@ -52,21 +52,6 @@ macro_rules! log_test_error {
         }
     };
 }
-
-macro_rules! impl_from_error {
-    ($from:path, $to:path) => {
-        impl From<$from> for ApplicationError {
-            fn from(_: $from) -> Self {
-                $to
-            }
-        }
-    };
-}
-
-impl_from_error!(argon2::Error, ApplicationError::Unauthorized);
-impl_from_error!(argon2::password_hash::Error, ApplicationError::Unauthorized);
-impl_from_error!(hcaptcha::HcaptchaError, ApplicationError::Unauthorized);
-
 impl IntoResponse for ApplicationError {
     fn into_response(self) -> Response {
         match self {

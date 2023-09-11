@@ -23,11 +23,6 @@ use surrealdb::Surreal;
 #[cfg(not(test))]
 use version_compare::{Cmp, Version};
 
-pub mod definitions;
-pub mod id;
-pub mod page;
-pub mod relation;
-
 const SURREALDB_ENDPOINT: &str = "SURREALDB_ENDPOINT";
 const SURREALDB_USERNAME: &str = "SURREALDB_USERNAME";
 const SURREALDB_PASSWORD: &str = "SURREALDB_PASSWORD";

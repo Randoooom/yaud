@@ -18,14 +18,9 @@
 use crate::prelude::*;
 use aide::axum::ApiRouter;
 
-pub mod auth;
 pub mod extractor;
 pub mod openapi;
-pub mod task;
 
 pub fn router(state: ApplicationState) -> ApiRouter {
-    ApiRouter::new()
-        .nest_api_service("/auth", auth::router(state.clone()))
-        .nest_api_service("/task", task::router(state.clone()))
-        .with_state(state)
+    ApiRouter::new().with_state(state)
 }

@@ -6,32 +6,23 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-yaud-codegen = { path = "./yaud-codegen" }
-
 aide = { version = "0.11.0", features = ["redoc", "axum", "axum-extra-cookie", "macros"] }
 axum = { version = "0.6.19", features = ["macros", "multipart"] }
-axum-extra = { version = "0.7.5", features = ["cookie"] }
 axum-jsonschema = { version = "0.6.0", features = ["aide"] }
 axum-test-helper = { version = "0.3.0", features = ["withouttrace", "cookies"] }
 schemars = { version = "0.8.12", features = ["chrono"] }
 serde = { version = "1.0.176", features = ["derive"] }
 surrealdb = "1.0.0-beta.11"
 tokio = { version = "1.29.1", features = ["full"] }
-totp-rs = { version = "5.1.0", features = ["qr", "gen_secret"] }
 tower-http = { version = "0.4.3", features = ["fs", "tracing", "cors"] }
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 
-argon2 = "0.5.1"
-async-trait = "0.1.72"
 axum-macros = "0.3.8"
 cfg-if = "1.0.0"
-chacha20poly1305 = "0.10.1"
 chrono = "0.4.26"
 getset = "0.1.2"
-hcaptcha = "2.2.2"
 lazy_static = "1.4.0"
 nanoid = "0.4.0"
-openssl = "0.10.55"
 serde_json = "1.0.104"
 thiserror = "1.0.44"
 tracing = "0.1.37"
