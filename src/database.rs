@@ -24,6 +24,7 @@ use surrealdb::Surreal;
 use version_compare::{Cmp, Version};
 
 const SURREALDB_ENDPOINT: &str = "SURREALDB_ENDPOINT";
+const HOOK_ENDPOINT: &str = "HOOK_ENDPOINT";
 const SURREALDB_USERNAME: &str = "SURREALDB_USERNAME";
 const SURREALDB_PASSWORD: &str = "SURREALDB_PASSWORD";
 
@@ -78,11 +79,26 @@ pub async fn connect() -> Result<ConnectionInfo> {
         .use_db(database.as_str())
         .await?;
 
+    // define global parameters
+    client
+        .query("DEFINE PARAM $hookEndpoint VALUE $endpoint")
+        .bind((
+            "endpoint",
+            std::env::var(HOOK_ENDPOINT)
+                .unwrap_or_else(|_| panic!("Missing {HOOK_ENDPOINT} env variable"))
+                .as_str(),
+        ))
+        .await?
+        .check()?;
+
     // perform the migrations
     #[cfg(not(test))]
     migrate(&client, env!("CARGO_PKG_VERSION"), Vec::new()).await?;
     // execute the up queries
-    client.query(include_str!("./up.surrealql")).await?;
+    client
+        .query(include_str!("./up.surrealql"))
+        .await?
+        .check()?;
     info!("Initiated tables");
 
     Ok(ConnectionInfo {

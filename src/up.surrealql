@@ -1,51 +1,85 @@
-DEFINE SCOPE one_time SESSION 1m
-    SIGNUP ( SELECT * FROM true )
-    SIGNIN ( SELECT * FROM $account );
+DEFINE TABLE hook SCHEMAFULL;
+    DEFINE FIELD token      ON TABLE hook TYPE string   DEFAULT rand::string(32);
+    DEFINE FIELD created_at on TABLE hook TYPE datetime DEFAULT time::now();
+
+DEFINE FUNCTION fn::trigger_sidecar_hook() {
+    LET $hook = (CREATE hook);
+
+    RETURN http::post($hookEndpoint, {
+        "token": $hook.token
+    })
+};
+
+DEFINE TABLE account SCHEMAFULL;
+    DEFINE FIELD first_name ON TABLE account        TYPE string;
+    DEFINE FIELD last_name  ON TABLE account        TYPE string;
+    DEFINE FIELD mail       ON TABLE account        TYPE string ASSERT string::is::email($value) VALUE string::lowercase($value);
+    DEFINE FIELD password   on TABLE account        TYPE string;
+    DEFINE FIELD updated_at on TABLE account        TYPE datetime VALUE time::now();
+    DEFINE FIELD created_at on TABLE account        TYPE datetime DEFAULT time::now();
+    DEFINE INDEX mailIndex  on TABLE account        COLUMNS mail UNIQUE;
+
+DEFINE SCOPE account SESSION 1h
+    SIGNUP (
+        CREATE account SET  first_name      = $first,
+                            last_name       = $last,
+                            mail            = $mail,
+                            password        = crypto::argon2::generate($value)
+    )
+    SIGNIN (
+        SELECT * FROM account WHERE mail = $mail AND crypto::argon2::compare(password, $password)
+    )
+;
+
+DEFINE TABLE permission SCHEMAFULL;
 
 DEFINE FUNCTION fn::has_permission($account: record(account), $permission: record(permission)) {
     LET $result = SELECT $permission INSIDE ->has->permission.id AS result FROM $account;
     RETURN $result.result;
 };
 
-DEFINE TABLE account SCHEMAFULL;
-    DEFINE FIELD first_name ON TABLE account        TYPE string;
-    DEFINE FIELD last_name  ON TABLE account        TYPE string;
-    DEFINE FIELD mail       ON TABLE account        TYPE string ASSERT string::is::email($value);
-    DEFINE FIELD password   on TABLE account        TYPE string;
-    DEFINE FIELD nonce      on TABLE account        TYPE string;
-    DEFINE FIELD secret     on TABLE account        TYPE string;
-    DEFINE FIELD totp       on TABLE account        TYPE object;
-    DEFINE FIELD totp.active on TABLE account       TYPE bool DEFAULT false;
-    DEFINE FIELD totp.reactivate on TABLE account   TYPE bool DEFAULT false;
-    DEFINE FIELD updated_at on TABLE account        TYPE datetime VALUE time::now();
-    DEFINE FIELD created_at on TABLE account        TYPE datetime DEFAULT time::now();
-
-DEFINE TABLE permission SCHEMAFULL;
-
-DEFINE TABLE session SCHEMAFULL;
-    DEFINE FIELD refresh_token  on TABLE session TYPE string;
-    DEFINE FIELD target         on TABLE session TYPE record(account);
-    DEFINE FIELD iat            on TABLE session TYPE string;
-    DEFINE FIELD exp            on TABLE session TYPE string;
-    DEFINE FIELD refresh_exp    on TABLE session TYPE string;
-
 DEFINE TABLE task_request SCHEMAFULL
     PERMISSIONS
-        FOR update
-            WHERE fn::has_permission($auth.account, type::thing("permission", "task.request.edit"));
+        FOR update WHERE
+            fn::has_permission($auth.id, type::thing("permission", "task.request.edit"))
+        FOR create FULL
+        FOR delete WHERE
+            $auth.id = customer.id OR
+            fn::has_permission($auth.id, type::thing("permission", "task.request.delete"))
+        FOR select WHERE
+            $auth.id = customer.id OR
+            fn::has_permission($auth.id, type::thing("permission", "account.select"));
     DEFINE FIELD title       on TABLE task_request TYPE string;
-    DEFINE FIELD customer    on TABLE task_request TYPE string;
+    DEFINE FIELD customer    on TABLE task_request TYPE record(account);
     DEFINE FIELD description on TABLE task_request TYPE string;
     DEFINE FIELD due         on TABLE task_request TYPE string;
     DEFINE FIELD state       on TABLE task_request TYPE string;
     DEFINE FIELD updated_at  on TABLE task_request TYPE datetime    DEFAULT time::now();
     DEFINE FIELD created_at  on TABLE task_request TYPE datetime    VALUE time::now();
 
-DEFINE TABLE task_state SCHEMAFULL;
+DEFINE TABLE task_state SCHEMAFULL
+    PERMISSIONS
+        FOR create
+            WHERE fn::has_permission($auth.id, type::thing("permission", "task.state.create"))
+        FOR update
+            WHERE fn::has_permission($auth.id, type::thing("permission", "task.state.edit"))
+        FOR select FULL
+        FOR delete
+            WHERE fn::has_permission($auth.id, type::thing("permission", "task.state.delete"));
     DEFINE FIELD title       on TABLE task_state TYPE string;
     DEFINE FIELD description on TABLE task_state TYPE string;
 
-DEFINE TABLE task SCHEMAFULL;
+DEFINE TABLE task SCHEMAFULL
+    PERMISSIONS
+        FOR create
+            WHERE fn::has_permission($auth.id, type::thing("permission", "task.request.edit"))
+        FOR update
+            WHERE fn::has_permission($auth.id, type::thing("permission", "task.edit"))
+        FOR delete
+            WHERE fn::has_permission($auth.id, type::thing("permission", "task.delete"))
+        FOR select
+            WHERE $auth.id = customer.id OR
+                  fn::has_permission($auth.id, type::thing("permission", "task.select"));
     DEFINE FIELD title       on TABLE task TYPE string;
     DEFINE FIELD customer    on TABLE task TYPE string;
     DEFINE FIELD description on TABLE task TYPE string;
@@ -54,3 +88,21 @@ DEFINE TABLE task SCHEMAFULL;
     DEFINE FIELD priority    on TABLE task TYPE string;
     DEFINE FIELD updated_at  on TABLE task TYPE datetime    DEFAULT time::now();
     DEFINE FIELD created_at  on TABLE task TYPE datetime    VALUE time::now();
+
+DEFINE TABLE message SCHEMAFULL
+    PERMISSIONS
+        FOR create
+            WHERE   $auth.id = reference.customer.id OR
+                    fn::has_permission($auth.id, type::thing("permission", "task.select"))
+        FOR update
+            WHERE   NONE
+        FOR delete
+            WHERE   $auth.id = author.id
+        FOR select
+            WHERE   $auth.id = reference.customer.id OR
+                    fn::has_permission($auth.id, type::thing("permission", "task.select"));
+    DEFINE FIELD content    on TABLE message TYPE string PERMISSIONS FOR update WHERE $auth.id = author.id;
+    DEFINE FIELD reference  on TABLE message TYPE record();
+    DEFINE FIELD author     on TABLE message TYPE record(account);
+    DEFINE FIELD updated_at on TABLE task TYPE datetime    DEFAULT time::now();
+    DEFINE FIELD created_at on TABLE task TYPE datetime    VALUE time::now();

@@ -28,6 +28,7 @@ extern crate serde_json;
 
 use crate::database::ConnectionInfo;
 use crate::prelude::*;
+use axum::routing::post;
 use axum::{BoxError, Router};
 use std::net::SocketAddr;
 use tower_http::trace::TraceLayer;
@@ -38,14 +39,13 @@ mod database;
 mod error;
 mod hook;
 mod state;
-
-#[cfg(test)]
 mod tests;
 
 pub async fn router(connection: ConnectionInfo) -> std::result::Result<Router, BoxError> {
     let state = ApplicationState::from(connection);
 
     Ok(Router::new()
+        .route("/hook", post(hook::hook))
         .layer(TraceLayer::new_for_http())
         .with_state(state))
 }

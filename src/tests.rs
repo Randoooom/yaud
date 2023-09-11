@@ -15,14 +15,8 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-use crate::prelude::DatabaseConnection;
-use axum::BoxError;
+use crate::prelude::*;
 use axum_test_helper::TestClient;
-use lazy_static::lazy_static;
-
-lazy_static! {
-    pub static ref TEST_MAIL: String = std::env::var("TEST_MAIL").unwrap();
-}
 
 #[derive(Getters)]
 #[get = "pub"]
@@ -32,9 +26,9 @@ pub struct TestSuite {
 }
 
 impl TestSuite {
-    pub async fn init() -> Result<Self, BoxError> {
+    pub async fn init() -> Result<Self> {
         let connection_info = crate::database::connect().await?;
-        let client = TestClient::new(crate::router(connection_info.clone()).await?);
+        let client = TestClient::new(crate::router(connection_info.clone()).await.unwrap());
         let connection = connection_info.connection;
 
         Ok(Self { client, connection })
