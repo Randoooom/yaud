@@ -80,14 +80,10 @@ pub async fn connect() -> Result<ConnectionInfo> {
         .await?;
 
     // define global parameters
+    let endpoint = std::env::var(HOOK_ENDPOINT)
+        .unwrap_or_else(|_| panic!("Missing {HOOK_ENDPOINT} env variable"));
     client
-        .query("DEFINE PARAM $hookEndpoint VALUE $endpoint")
-        .bind((
-            "endpoint",
-            std::env::var(HOOK_ENDPOINT)
-                .unwrap_or_else(|_| panic!("Missing {HOOK_ENDPOINT} env variable"))
-                .as_str(),
-        ))
+        .query(format!("DEFINE PARAM $hookEndpoint VALUE '{}'", endpoint))
         .await?
         .check()?;
 
@@ -118,8 +114,8 @@ pub async fn migrate(
     let mut responses = client
         .query(
             "DEFINE TABLE migration SCHEMALESS;
-            DEFINE FIELD version     on TABLE migration TYPE string ASSERT $value IS NOT NULL;
-            DEFINE FIELD created_at  on TABLE migration TYPE datetime VALUE time::now();",
+            DEFINE FIELD version     on TABLE migration TYPE string;
+            DEFINE FIELD created_at  on TABLE migration TYPE datetime DEFAULT time::now();",
         )
         .query("SELECT version, created_at FROM migration ORDER BY created_at DESC LIMIT 1")
         .await?
@@ -171,4 +167,32 @@ macro_rules! sql_span {
         let _ = span.enter();
         $expr
     }};
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use surrealdb::opt::auth::Scope;
+
+    #[tokio::test]
+    async fn test_signup() -> Result<()> {
+        let info = connect().await?;
+        let connection = &info.connection;
+
+        connection
+            .signup(Scope {
+                namespace: info.namespace.as_str(),
+                database: info.database.as_str(),
+                scope: "account",
+                params: &json!({
+                    "first": "first",
+                    "last": "last",
+                    "mail": "mail",
+                    "password": "password"
+                }),
+            })
+            .await?;
+
+        Ok(())
+    }
 }

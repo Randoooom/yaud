@@ -26,46 +26,60 @@ extern crate tracing;
 #[macro_use]
 extern crate serde_json;
 
-use crate::database::ConnectionInfo;
-use crate::prelude::*;
-use axum::routing::post;
-use axum::{BoxError, Router};
-use std::net::SocketAddr;
-use tower_http::trace::TraceLayer;
+use crate::error::ApplicationError;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 mod database;
 mod error;
 mod hook;
-mod state;
-mod tests;
-
-pub async fn router(connection: ConnectionInfo) -> std::result::Result<Router, BoxError> {
-    let state = ApplicationState::from(connection);
-
-    Ok(Router::new()
-        .route("/hook", post(hook::hook))
-        .layer(TraceLayer::new_for_http())
-        .with_state(state))
-}
 
 #[tokio::main]
-async fn main() -> std::result::Result<(), BoxError> {
-    let _ = std::env::var("DOMAIN").expect("DOMAIN NOT FOUND");
-
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::from_default_env())
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let address = SocketAddr::from(([0, 0, 0, 0], 8000));
-    info!("starting on http://0.0.0.0:8000");
-    let connection = database::connect().await?;
-    axum::Server::bind(&address)
-        .serve(router(connection).await?.into_make_service())
-        .await
-        .unwrap();
+    let (sender, receiver) = kanal::unbounded_async();
+
+    let info = database::connect().await?;
+    let connection = info.connection;
+
+    // as the surrealdb rust-sdk currently does not support live queries we have to adapt here
+    // and are regularly checking for new hook triggers.
+    tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                result = hook::hook(&connection) => {
+                    match result {
+                        Ok(()) => {},
+                        Err(error) => error!("Error occurred during hook: {}", error),
+                    }
+
+                    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                },
+                _ = receiver.recv() => {
+                    warn!("Received shutdown signal on kanal receiver");
+                    break;
+                }
+            }
+        }
+
+        Ok::<(), ApplicationError>(())
+    });
+
+    match tokio::signal::ctrl_c().await {
+        Ok(()) => {}
+        Err(error) => {
+            error!("Unable to listen for shutdown signal: {}", error);
+            sender.send(true).await?;
+        }
+    }
+
+    info!("Received shutdown signal... Shutting down...");
+    // shutdown
+    sender.send(true).await?;
 
     Ok(())
 }
@@ -73,5 +87,5 @@ async fn main() -> std::result::Result<(), BoxError> {
 pub mod prelude {
     pub use crate::database::DatabaseConnection;
     pub use crate::error::*;
-    pub use crate::state::*;
+    pub use crate::sql_span;
 }

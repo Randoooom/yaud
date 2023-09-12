@@ -1,13 +1,15 @@
 DEFINE TABLE hook SCHEMAFULL PERMISSIONS NONE;
     DEFINE FIELD token      ON TABLE hook TYPE string   DEFAULT rand::string(32);
-    DEFINE FIELD created_at on TABLE hook TYPE datetime DEFAULT time::now();
+    DEFINE FIELD pending    ON TABLE hook TYPE bool     DEFAULT true;
+    DEFINE FIELD updated_at on TABLE hook TYPE datetime DEFAULT time::now() VALUE time::now();
+    DEFINE FIELD created_at ON TABLE hook TYPE datetime DEFAULT time::now();
 
-DEFINE FUNCTION fn::trigger_sidecar_hook() {
-    LET $hook = (CREATE hook);
+DEFINE FUNCTION fn::hook() {
+    IF array::len(SELECT * FROM hook WHERE pending) == 0 THEN
+       CREATE hook;
+    END;
 
-    RETURN http::post($hookEndpoint, {
-        "token": $hook.token
-    })
+    RETURN true;
 };
 
 DEFINE PARAM $types VALUE [
@@ -31,10 +33,13 @@ DEFINE TABLE mail SCHEMAFULL PERMISSIONS NONE;
     DEFINE FIELD recipient  on TABLE mail   TYPE string ASSERT string::is::email($value);
     DEFINE FIELD type       on TABLE mail   TYPE string ASSERT $value IN $types;
     DEFINE FIELD delivered  on TABLE mail   TYPE bool DEFAULT false;
-    DEFINE FIELD updated_at on TABLE mail   TYPE datetime VALUE time::now();
+    DEFINE FIELD updated_at on TABLE mail   TYPE datetime DEFAULT time::now() VALUE time::now();
     DEFINE FIELD created_at on TABLE mail   TYPE datetime DEFAULT time::now();
 
-DEFINE TABLE account SCHEMAFULL;
+DEFINE TABLE account SCHEMAFULL
+    PERMISSIONS
+        FOR create NONE,
+        FOR delete, update, select WHERE $auth.id = id;
     DEFINE FIELD first_name ON TABLE account        TYPE string;
     DEFINE FIELD last_name  ON TABLE account        TYPE string;
     DEFINE FIELD mail       ON TABLE account        TYPE string ASSERT string::is::email($value) VALUE string::lowercase($value);
@@ -50,7 +55,7 @@ DEFINE TABLE account SCHEMAFULL;
                 fn::has_permission($auth.id, type::thing("permission", "task.select"));
     DEFINE FIELD options.notify_message_created         on TABLE account TYPE bool DEFAULT false;
     DEFINE FIELD options.notify_state_updates           on TABLE account TYPE bool DEFAULT false;
-    DEFINE FIELD updated_at on TABLE account        TYPE datetime VALUE time::now();
+    DEFINE FIELD updated_at on TABLE account        TYPE datetime DEFAULT time::now() VALUE time::now();
     DEFINE FIELD created_at on TABLE account        TYPE datetime DEFAULT time::now();
     DEFINE INDEX mailIndex  on TABLE account        COLUMNS mail UNIQUE;
 
@@ -59,7 +64,7 @@ DEFINE SCOPE account SESSION 1h
         CREATE account SET  first_name      = $first,
                             last_name       = $last,
                             mail            = $mail,
-                            password        = crypto::argon2::generate($value)
+                            password        = crypto::argon2::generate($password)
     )
     SIGNIN (
         SELECT * FROM account WHERE mail = $mail AND crypto::argon2::compare(password, $password)
@@ -103,8 +108,8 @@ DEFINE TABLE task_request SCHEMAFULL
     DEFINE FIELD description on TABLE task_request TYPE string;
     DEFINE FIELD due         on TABLE task_request TYPE string;
     DEFINE FIELD state       on TABLE task_request TYPE string;
-    DEFINE FIELD updated_at  on TABLE task_request TYPE datetime    DEFAULT time::now();
-    DEFINE FIELD created_at  on TABLE task_request TYPE datetime    VALUE time::now();
+    DEFINE FIELD updated_at  on TABLE task_request TYPE datetime    DEFAULT time::now() VALUE time::now();
+    DEFINE FIELD created_at  on TABLE task_request TYPE datetime    DEFAULT time::now();
 
 DEFINE EVENT created on TABLE task_request WHEN $event = "CREATE" THEN {
     CREATE notification CONTENT {
@@ -121,7 +126,7 @@ DEFINE EVENT created on TABLE task_request WHEN $event = "CREATE" THEN {
        };
     };
 
-    SELECT * FROM fn::trigger_sidecar_hook();
+    CREATE ONLY hook;
 };
 
 DEFINE EVENT task_request_state_updated on TABLE task_request WHEN $event = "UPDATE" AND $before.state != $after.state THEN {
@@ -138,7 +143,7 @@ DEFINE EVENT task_request_state_updated on TABLE task_request WHEN $event = "UPD
         };
     END;
 
-    SELECT * FROM fn::trigger_sidecar_hook();
+    CREATE ONLY hook;
 };
 
 DEFINE TABLE task_state SCHEMAFULL
@@ -170,8 +175,8 @@ DEFINE TABLE task SCHEMAFULL
     DEFINE FIELD due         on TABLE task TYPE datetime;
     DEFINE FIELD state       on TABLE task TYPE string;
     DEFINE FIELD priority    on TABLE task TYPE string;
-    DEFINE FIELD updated_at  on TABLE task TYPE datetime    DEFAULT time::now();
-    DEFINE FIELD created_at  on TABLE task TYPE datetime    VALUE time::now();
+    DEFINE FIELD updated_at  on TABLE task TYPE datetime    DEFAULT time::now() VALUE time::now();
+    DEFINE FIELD created_at  on TABLE task TYPE datetime    DEFAULT time::now();
 
 DEFINE EVENT task_state_updated on TABLE task WHEN $event = "UPDATE" AND $before.state != $after.state THEN {
     CREATE notification CONTENT {
@@ -187,7 +192,7 @@ DEFINE EVENT task_state_updated on TABLE task WHEN $event = "UPDATE" AND $before
         };
     END;
 
-    SELECT * FROM fn::trigger_sidecar_hook();
+    CREATE ONLY hook;
 };
 
 DEFINE TABLE message SCHEMAFULL
@@ -205,8 +210,8 @@ DEFINE TABLE message SCHEMAFULL
     DEFINE FIELD reference  on TABLE message TYPE record() PERMISSIONS FOR update, delete NONE FOR select, create WHERE reference.id = $auth.id OR fn::has_permission($auth.id, type::thing("permission", "task.select"));
     DEFINE FIELD author     on TABLE message TYPE record(account) VALUE $before OR $auth.id PERMISSIONS NONE;
     DEFINE FIELD internal   on TABLE message TYPE bool     DEFAULT false PERMISSIONS FOR create, update WHERE fn::has_permission($auth.id, type::thing("permission", "task.select"));
-    DEFINE FIELD updated_at on TABLE task TYPE datetime    DEFAULT time::now();
-    DEFINE FIELD created_at on TABLE task TYPE datetime    VALUE time::now();
+    DEFINE FIELD updated_at on TABLE task TYPE datetime    DEFAULT time::now() VALUE time::now();
+    DEFINE FIELD created_at on TABLE task TYPE datetime    DEFAULT time::now();
 
 DEFINE EVENT created_message on TABLE message WHEN $event = "CREATE" THEN {
     LET $type = IF meta::tb($value.reference.id) = "task" THEN
@@ -238,5 +243,5 @@ DEFINE EVENT created_message on TABLE message WHEN $event = "CREATE" THEN {
        };
     };
 
-    SELECT * FROM fn::trigger_sidecar_hook();
+    CREATE ONLY hook;
 };

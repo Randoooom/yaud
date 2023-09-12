@@ -15,10 +15,6 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
-use axum::Json;
-
 #[derive(Error, Debug)]
 pub enum ApplicationError {
     #[error("Unauthorized")]
@@ -38,44 +34,3 @@ pub enum ApplicationError {
 }
 
 pub type Result<T> = std::result::Result<T, ApplicationError>;
-
-macro_rules! log_test_error {
-    ($error:expr) => {
-        #[cfg(test)]
-        {
-            println!("Err: {:?}", $error.to_string());
-        }
-    };
-}
-impl IntoResponse for ApplicationError {
-    fn into_response(self) -> Response {
-        match self {
-            ApplicationError::Unauthorized => (
-                StatusCode::UNAUTHORIZED,
-                Json(json!({"error": "Unauthorized"})),
-            ),
-            ApplicationError::BadRequest(error) => {
-                log_test_error!(error);
-                (StatusCode::BAD_REQUEST, Json(json!({ "error": error })))
-            }
-            ApplicationError::Forbidden(error) => {
-                log_test_error!(error);
-                (StatusCode::FORBIDDEN, Json(json!({ "error": error })))
-            }
-            _ => {
-                error!("Err: {}", self.to_string());
-
-                #[cfg(test)]
-                {
-                    println!("Err: {:?}", self.to_string());
-                }
-
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"error": "Error occurred while processing the request"})),
-                )
-            }
-        }
-        .into_response()
-    }
-}
