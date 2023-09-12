@@ -172,7 +172,14 @@ macro_rules! sql_span {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lazy_static::lazy_static;
+    use std::ops::Deref;
     use surrealdb::opt::auth::Scope;
+    use surrealdb::sql::Thing;
+
+    lazy_static! {
+        pub static ref TEST_MAIL: String = std::env::var("TEST_MAIL").unwrap();
+    }
 
     #[tokio::test]
     async fn test_signup() -> Result<()> {
@@ -187,11 +194,125 @@ mod tests {
                 params: &json!({
                     "first": "first",
                     "last": "last",
-                    "mail": "mail",
+                    "mail": TEST_MAIL.as_str(),
                     "password": "password"
                 }),
             })
             .await?;
+
+        connection
+            .signin(Scope {
+                namespace: info.namespace.as_str(),
+                database: info.database.as_str(),
+                scope: "account",
+                params: &json!({
+                    "mail": TEST_MAIL.as_str(),
+                    "password": "password"
+                }),
+            })
+            .await?;
+
+        assert!(connection
+            .signin(Scope {
+                namespace: info.namespace.as_str(),
+                database: info.database.as_str(),
+                scope: "account",
+                params: &json!({
+                    "mail": TEST_MAIL.as_str(),
+                    "password": "passwrd"
+                }),
+            })
+            .await
+            .is_err());
+
+        Ok(())
+    }
+
+    async fn init() -> Result<DatabaseConnection> {
+        let info = connect().await?;
+        let connection = &info.connection;
+
+        connection
+            .signup(Scope {
+                namespace: info.namespace.as_str(),
+                database: info.database.as_str(),
+                scope: "account",
+                params: &json!({
+                    "first": "first",
+                    "last": "last",
+                    "mail": *TEST_MAIL,
+                    "password": "password"
+                }),
+            })
+            .await?;
+
+        Ok(info.connection)
+    }
+
+    #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+    struct Account {
+        id: Thing,
+        first_name: String,
+        last_name: String,
+        mail: String,
+        password: String,
+        options: AccountOptions,
+        updated_at: String,
+        created_at: String,
+    }
+
+    #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+    struct AccountOptions {
+        notify_task_request_created: bool,
+        notify_task_created: bool,
+        notify_message_created: bool,
+        notify_state_updated: bool,
+    }
+
+    async fn fetch_account(connection: &DatabaseConnection) -> Result<Account> {
+        let account: Option<Account> = connection
+            .query("SELECT * FROM account WHERE mail = $mail")
+            .bind(("mail", TEST_MAIL.deref()))
+            .await?
+            .take(0)?;
+
+        Ok(account.unwrap())
+    }
+
+    #[tokio::test]
+    async fn test_account_update() -> Result<()> {
+        let connection = init().await?;
+        let account = fetch_account(&connection).await?;
+
+        let updated: Account = connection
+            .update(account.id.clone())
+            .merge(&json! ({
+                "first_name": "test",
+                "last_name": "test",
+                "options": {
+                    "notify_task_request_created": true,
+                    "notify_task_created": true,
+                    "notify_message_created": true,
+                    "notify_state_updated": true,
+                }
+            }))
+            .await?
+            .unwrap();
+        assert_eq!("test", updated.first_name.as_str());
+        assert_eq!("test", updated.last_name.as_str());
+        // ref https://github.com/surrealdb/surrealdb/issues/2161
+        // assert_eq!(false, updated.options.notify_task_request_created);
+        // assert_eq!(false, updated.options.notify_task_created);
+        assert_eq!(true, updated.options.notify_state_updated);
+        assert_eq!(true, updated.options.notify_message_created);
+
+        assert!(connection
+            .update::<Option<Account>>(account.id.clone())
+            .merge(&json! ({
+                "mail": "test"
+            }))
+            .await
+            .is_err());
 
         Ok(())
     }

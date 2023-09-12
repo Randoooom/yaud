@@ -20,3 +20,4 @@ version-compare = "0.1.1"
 
 [dev-dependencies]
 nanoid = "0.4.0"
+lazy_static = "1.4.0"

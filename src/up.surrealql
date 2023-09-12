@@ -39,22 +39,22 @@ DEFINE TABLE mail SCHEMAFULL PERMISSIONS NONE;
 DEFINE TABLE account SCHEMAFULL
     PERMISSIONS
         FOR create NONE,
-        FOR delete, update, select WHERE $auth.id = id;
+        FOR delete, select WHERE $auth.id = id;
     DEFINE FIELD first_name ON TABLE account        TYPE string;
     DEFINE FIELD last_name  ON TABLE account        TYPE string;
-    DEFINE FIELD mail       ON TABLE account        TYPE string ASSERT string::is::email($value) VALUE string::lowercase($value);
+    DEFINE FIELD mail       ON TABLE account        TYPE string ASSERT string::is::email($value);
     DEFINE FIELD password   on TABLE account        TYPE string;
-    DEFINE FIELD options    on TABLE account        TYPE object;
+    DEFINE FIELD options    on TABLE account        TYPE object DEFAULT {};
     DEFINE FIELD options.notify_task_request_created    on TABLE account TYPE bool DEFAULT false
         PERMISSIONS
-            FOR create, update, select WHERE
-                fn::has_permission($auth.id, type::thing("permission", "task.request.select"));
+            FOR update WHERE
+                $auth.id = id AND fn::has_permission($auth.id, type::thing("permission", "task.request.select"));
     DEFINE FIELD options.notify_task_created            on TABLE account TYPE bool DEFAULT false
         PERMISSIONS
-            FOR create, update, select WHERE
-                fn::has_permission($auth.id, type::thing("permission", "task.select"));
+            FOR update WHERE
+                $auth.id = id AND fn::has_permission($auth.id, type::thing("permission", "task.select"));
     DEFINE FIELD options.notify_message_created         on TABLE account TYPE bool DEFAULT false;
-    DEFINE FIELD options.notify_state_updates           on TABLE account TYPE bool DEFAULT false;
+    DEFINE FIELD options.notify_state_updated           on TABLE account TYPE bool DEFAULT false;
     DEFINE FIELD updated_at on TABLE account        TYPE datetime DEFAULT time::now() VALUE time::now();
     DEFINE FIELD created_at on TABLE account        TYPE datetime DEFAULT time::now();
     DEFINE INDEX mailIndex  on TABLE account        COLUMNS mail UNIQUE;
@@ -136,7 +136,7 @@ DEFINE EVENT task_request_state_updated on TABLE task_request WHEN $event = "UPD
             by: $value.customer.id,
     };
 
-    IF $value.customer.options.notify_state_updates THEN
+    IF $value.customer.options.notify_state_updated THEN
         CREATE mail CONTENT {
             recipient: $value.customer.mail,
             type: "updated_task_request_state"
@@ -185,7 +185,7 @@ DEFINE EVENT task_state_updated on TABLE task WHEN $event = "UPDATE" AND $before
             by: $value.customer.id,
     };
 
-    IF $value.customer.options.notify_state_updates THEN
+    IF $value.customer.options.notify_state_updated THEN
         CREATE mail CONTENT {
             recipient: $value.customer.mail,
             type: "updated_task_state"
