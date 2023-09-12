@@ -1,4 +1,4 @@
-DEFINE TABLE hook SCHEMAFULL;
+DEFINE TABLE hook SCHEMAFULL PERMISSIONS NONE;
     DEFINE FIELD token      ON TABLE hook TYPE string   DEFAULT rand::string(32);
     DEFINE FIELD created_at on TABLE hook TYPE datetime DEFAULT time::now();
 
@@ -10,11 +10,46 @@ DEFINE FUNCTION fn::trigger_sidecar_hook() {
     })
 };
 
+DEFINE PARAM $types VALUE [
+    "created_task_message",
+    "created_task_request_message",
+    "created_task_request",
+    "updated_task_state",
+    "updated_task_request_state"
+];
+
+DEFINE PARAM $permissions VALUE [
+    "task.request.select",
+    "task.request.edit",
+    "task.request.delete",
+    "task.edit",
+    "task.delete",
+    "task.select"
+];
+
+DEFINE TABLE mail SCHEMAFULL PERMISSIONS NONE;
+    DEFINE FIELD recipient  on TABLE mail   TYPE string ASSERT string::is::email($value);
+    DEFINE FIELD type       on TABLE mail   TYPE string ASSERT $value IN $types;
+    DEFINE FIELD delivered  on TABLE mail   TYPE bool DEFAULT false;
+    DEFINE FIELD updated_at on TABLE mail   TYPE datetime VALUE time::now();
+    DEFINE FIELD created_at on TABLE mail   TYPE datetime DEFAULT time::now();
+
 DEFINE TABLE account SCHEMAFULL;
     DEFINE FIELD first_name ON TABLE account        TYPE string;
     DEFINE FIELD last_name  ON TABLE account        TYPE string;
     DEFINE FIELD mail       ON TABLE account        TYPE string ASSERT string::is::email($value) VALUE string::lowercase($value);
     DEFINE FIELD password   on TABLE account        TYPE string;
+    DEFINE FIELD options    on TABLE account        TYPE object;
+    DEFINE FIELD options.notify_task_request_created    on TABLE account TYPE bool DEFAULT false
+        PERMISSIONS
+            FOR create, update, select WHERE
+                fn::has_permission($auth.id, type::thing("permission", "task.request.select"));
+    DEFINE FIELD options.notify_task_created            on TABLE account TYPE bool DEFAULT false
+        PERMISSIONS
+            FOR create, update, select WHERE
+                fn::has_permission($auth.id, type::thing("permission", "task.select"));
+    DEFINE FIELD options.notify_message_created         on TABLE account TYPE bool DEFAULT false;
+    DEFINE FIELD options.notify_state_updates           on TABLE account TYPE bool DEFAULT false;
     DEFINE FIELD updated_at on TABLE account        TYPE datetime VALUE time::now();
     DEFINE FIELD created_at on TABLE account        TYPE datetime DEFAULT time::now();
     DEFINE INDEX mailIndex  on TABLE account        COLUMNS mail UNIQUE;
@@ -38,6 +73,20 @@ DEFINE FUNCTION fn::has_permission($account: record(account), $permission: recor
     RETURN $result.result;
 };
 
+DEFINE TABLE notification SCHEMAFULL
+    PERMISSIONS
+        FOR create, delete, update NONE
+        FOR select
+            WHERE
+                $auth.id = $for.id OR
+                    ($auth.id != by.id AND (permission IS NONE OR fn::has_permission($auth.id, permission.id)));
+    DEFINE FIELD type           on TABLE notification   TYPE string ASSERT $value IN $types;
+    DEFINE FIELD by             on TABLE notification   TYPE record(account);
+    DEFINE FIELD permission     on TABLE notification   TYPE option<record(permission)>;
+    DEFINE FIELD for            on TABLE notification   TYPE option<record(account)>;
+    DEFINE FIELD link           on TABLE notification   TYPE option<string>;
+    DEFINE FIELD created_at     on TABLE notification   TYPE datetime DEFAULT time::now();
+
 DEFINE TABLE task_request SCHEMAFULL
     PERMISSIONS
         FOR update WHERE
@@ -48,7 +97,7 @@ DEFINE TABLE task_request SCHEMAFULL
             fn::has_permission($auth.id, type::thing("permission", "task.request.delete"))
         FOR select WHERE
             $auth.id = customer.id OR
-            fn::has_permission($auth.id, type::thing("permission", "account.select"));
+            fn::has_permission($auth.id, type::thing("permission", "task.request.select"));
     DEFINE FIELD title       on TABLE task_request TYPE string;
     DEFINE FIELD customer    on TABLE task_request TYPE record(account);
     DEFINE FIELD description on TABLE task_request TYPE string;
@@ -56,6 +105,41 @@ DEFINE TABLE task_request SCHEMAFULL
     DEFINE FIELD state       on TABLE task_request TYPE string;
     DEFINE FIELD updated_at  on TABLE task_request TYPE datetime    DEFAULT time::now();
     DEFINE FIELD created_at  on TABLE task_request TYPE datetime    VALUE time::now();
+
+DEFINE EVENT created on TABLE task_request WHEN $event = "CREATE" THEN {
+    CREATE notification CONTENT {
+        type: "created_task_request",
+        link: "",
+        by: $value.customer.id,
+    };
+
+    LET $accounts = (SELECT mail FROM account WHERE options.notify_task_request_created AND fn::has_permission(account.id, type::thing("permission", "task.request.select")));
+    FOR $account IN $accounts {
+       CREATE mail CONTENT {
+           recipient: $account.mail,
+           type: "created_task_request"
+       };
+    };
+
+    SELECT * FROM fn::trigger_sidecar_hook();
+};
+
+DEFINE EVENT task_request_state_updated on TABLE task_request WHEN $event = "UPDATE" AND $before.state != $after.state THEN {
+    CREATE notification CONTENT {
+            type: "updated_task_request_state",
+            link: "",
+            by: $value.customer.id,
+    };
+
+    IF $value.customer.options.notify_state_updates THEN
+        CREATE mail CONTENT {
+            recipient: $value.customer.mail,
+            type: "updated_task_request_state"
+        };
+    END;
+
+    SELECT * FROM fn::trigger_sidecar_hook();
+};
 
 DEFINE TABLE task_state SCHEMAFULL
     PERMISSIONS
@@ -89,20 +173,70 @@ DEFINE TABLE task SCHEMAFULL
     DEFINE FIELD updated_at  on TABLE task TYPE datetime    DEFAULT time::now();
     DEFINE FIELD created_at  on TABLE task TYPE datetime    VALUE time::now();
 
+DEFINE EVENT task_state_updated on TABLE task WHEN $event = "UPDATE" AND $before.state != $after.state THEN {
+    CREATE notification CONTENT {
+            type: "updated_task_state",
+            link: "",
+            by: $value.customer.id,
+    };
+
+    IF $value.customer.options.notify_state_updates THEN
+        CREATE mail CONTENT {
+            recipient: $value.customer.mail,
+            type: "updated_task_state"
+        };
+    END;
+
+    SELECT * FROM fn::trigger_sidecar_hook();
+};
+
 DEFINE TABLE message SCHEMAFULL
     PERMISSIONS
         FOR create
-            WHERE   $auth.id = reference.customer.id OR
+            WHERE   ($auth.id = reference.customer.id AND internal = false) OR
                     fn::has_permission($auth.id, type::thing("permission", "task.select"))
-        FOR update
-            WHERE   NONE
+        FOR update NONE
         FOR delete
             WHERE   $auth.id = author.id
         FOR select
-            WHERE   $auth.id = reference.customer.id OR
+            WHERE   ($auth.id = reference.customer.id AND internal = false) OR
                     fn::has_permission($auth.id, type::thing("permission", "task.select"));
     DEFINE FIELD content    on TABLE message TYPE string PERMISSIONS FOR update WHERE $auth.id = author.id;
-    DEFINE FIELD reference  on TABLE message TYPE record();
-    DEFINE FIELD author     on TABLE message TYPE record(account);
+    DEFINE FIELD reference  on TABLE message TYPE record() PERMISSIONS FOR update, delete NONE FOR select, create WHERE reference.id = $auth.id OR fn::has_permission($auth.id, type::thing("permission", "task.select"));
+    DEFINE FIELD author     on TABLE message TYPE record(account) VALUE $before OR $auth.id PERMISSIONS NONE;
+    DEFINE FIELD internal   on TABLE message TYPE bool     DEFAULT false PERMISSIONS FOR create, update WHERE fn::has_permission($auth.id, type::thing("permission", "task.select"));
     DEFINE FIELD updated_at on TABLE task TYPE datetime    DEFAULT time::now();
     DEFINE FIELD created_at on TABLE task TYPE datetime    VALUE time::now();
+
+DEFINE EVENT created_message on TABLE message WHEN $event = "CREATE" THEN {
+    LET $type = IF meta::tb($value.reference.id) = "task" THEN
+                    "created_task_message"
+                ELSE
+                    "created_task_request_message"
+                END;
+
+
+    CREATE notification CONTENT {
+        type: "created_task_message",
+        link: "",
+        by: $value.author.id,
+    };
+
+    LET $accounts = (
+        SELECT mail FROM account WHERE
+            options.notify_message_created AND
+            id != $value.author.id AND
+                (
+                    $value.reference.customer.id = $auth.id OR
+                    fn::has_permission(account.id, type::thing("permission", "task.select"))
+                )
+    );
+    FOR $account IN $accounts {
+       CREATE mail CONTENT {
+           recipient: $account.mail,
+           type: "created_task_message"
+       };
+    };
+
+    SELECT * FROM fn::trigger_sidecar_hook();
+};
