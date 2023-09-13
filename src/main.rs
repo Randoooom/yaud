@@ -25,8 +25,15 @@ extern crate getset;
 extern crate tracing;
 #[macro_use]
 extern crate serde_json;
+#[macro_use]
+extern crate rust_i18n;
+#[macro_use]
+extern crate strum;
+#[macro_use]
+extern crate lazy_static;
 
 use crate::error::ApplicationError;
+use std::ops::Deref;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -34,8 +41,36 @@ mod database;
 mod error;
 mod hook;
 
+const HOOK_INTERVAL: u64 = 10000;
+
+i18n!("locales", fallback = "en");
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct Config {
+    surrealdb_endpoint: String,
+    surrealdb_username: String,
+    surrealdb_password: String,
+    smtp_host: String,
+    smtp_username: String,
+    smtp_password: String,
+    #[cfg(test)]
+    test_mail: String,
+    #[cfg(test)]
+    test_mail2: String,
+    #[cfg(test)]
+    test_mail_key: String,
+    #[cfg(test)]
+    test_mail_namespace: String,
+}
+
+lazy_static! {
+    pub static ref CONFIGURATION: Config = envy::from_env::<Config>().unwrap();
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    lazy_static::initialize(&CONFIGURATION);
+
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::from_default_env())
         .with(tracing_subscriber::fmt::layer())
@@ -43,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (sender, receiver) = kanal::unbounded_async();
 
-    let info = database::connect().await?;
+    let info = database::connect(None).await?;
     let connection = info.connection;
 
     // as the surrealdb rust-sdk currently does not support live queries we have to adapt here
@@ -57,7 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Err(error) => error!("Error occurred during hook: {}", error),
                     }
 
-                    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                    tokio::time::sleep(std::time::Duration::from_millis(HOOK_INTERVAL)).await;
                 },
                 _ = receiver.recv() => {
                     warn!("Received shutdown signal on kanal receiver");
@@ -80,7 +115,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Received shutdown signal... Shutting down...");
     // shutdown
     sender.send(true).await?;
-
     Ok(())
 }
 

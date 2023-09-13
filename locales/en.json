@@ -1,0 +1,24 @@
+{
+  "mail": {
+    "created_task_message": {
+      "title": "New message",
+      "body": "Hi %{name}, \n Someone just sent a new message regarding your task: %{link}"
+    },
+    "created_task_request_message": {
+      "title": "New message",
+      "body": "Hi %{name}, \n Someone just sent a new message regarding your request: %{link}"
+    },
+    "created_task_request": {
+      "title": "New request",
+      "body": "Hi %{name}, \n Someone just opened a new request: %{link}"
+    },
+    "updated_task_state": {
+      "title": "State updated",
+      "body": "Hi %{name}, \n The state of your task was just updated: %{link}"
+    },
+    "updated_task_request_state": {
+      "title": "State updated",
+      "body": "Hi %{name}, \n The state of your request was just updated: %{link}"
+    }
+  }
+}

@@ -17,16 +17,12 @@
 
 use crate::prelude::*;
 
+use crate::CONFIGURATION;
 use surrealdb::engine::remote::ws::{Client, Ws};
 use surrealdb::opt::auth::Root;
 use surrealdb::Surreal;
 #[cfg(not(test))]
 use version_compare::{Cmp, Version};
-
-const SURREALDB_ENDPOINT: &str = "SURREALDB_ENDPOINT";
-const HOOK_ENDPOINT: &str = "HOOK_ENDPOINT";
-const SURREALDB_USERNAME: &str = "SURREALDB_USERNAME";
-const SURREALDB_PASSWORD: &str = "SURREALDB_PASSWORD";
 
 pub type DatabaseConnection = Surreal<Client>;
 
@@ -37,24 +33,16 @@ pub struct ConnectionInfo {
     pub namespace: String,
 }
 
-pub async fn connect() -> Result<ConnectionInfo> {
+pub async fn connect(options: Option<(&str, &str)>) -> Result<ConnectionInfo> {
     // establish the connection
-    let client: Surreal<Client> = Surreal::new::<Ws>(
-        std::env::var(SURREALDB_ENDPOINT)
-            .unwrap_or_else(|_| panic!("Missing {SURREALDB_ENDPOINT} env variable")),
-    )
-    .await?;
+    let client: Surreal<Client> = Surreal::new::<Ws>(&CONFIGURATION.surrealdb_endpoint).await?;
     info!("Established connection to surrealdb");
 
     // authenticate
     client
         .signin(Root {
-            username: std::env::var(SURREALDB_USERNAME)
-                .unwrap_or_else(|_| panic!("Missing {SURREALDB_USERNAME} env variable"))
-                .as_str(),
-            password: std::env::var(SURREALDB_PASSWORD)
-                .unwrap_or_else(|_| panic!("Missing {SURREALDB_PASSWORD} env variable"))
-                .as_str(),
+            username: CONFIGURATION.surrealdb_username.as_str(),
+            password: CONFIGURATION.surrealdb_password.as_str(),
         })
         .await?;
     info!("Authenticated with surrealdb");
@@ -65,9 +53,12 @@ pub async fn connect() -> Result<ConnectionInfo> {
     let namespace = "production".to_owned();
 
     #[cfg(test)]
-    let database = nanoid::nanoid!();
-    #[cfg(test)]
-    let namespace = "test".to_owned();
+    let (namespace, database) = if let Some(options) = options {
+        (options.0.to_string(), options.1.to_string())
+    } else {
+        ("test".to_owned(), nanoid::nanoid!())
+    };
+
     #[cfg(test)]
     println!(
         "Connected with database {:?} in namespace \"test\"",
@@ -78,14 +69,6 @@ pub async fn connect() -> Result<ConnectionInfo> {
         .use_ns(namespace.as_str())
         .use_db(database.as_str())
         .await?;
-
-    // define global parameters
-    let endpoint = std::env::var(HOOK_ENDPOINT)
-        .unwrap_or_else(|_| panic!("Missing {HOOK_ENDPOINT} env variable"));
-    client
-        .query(format!("DEFINE PARAM $hookEndpoint VALUE '{}'", endpoint))
-        .await?
-        .check()?;
 
     // perform the migrations
     #[cfg(not(test))]
@@ -172,18 +155,51 @@ macro_rules! sql_span {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Utc;
     use lazy_static::lazy_static;
     use std::ops::Deref;
+    use std::time::Duration;
     use surrealdb::opt::auth::Scope;
     use surrealdb::sql::Thing;
 
     lazy_static! {
         pub static ref TEST_MAIL: String = std::env::var("TEST_MAIL").unwrap();
+        pub static ref TEST_MAIL2: String = std::env::var("TEST_MAIL2").unwrap();
+    }
+
+    async fn root(options: &ConnectionInfo) -> Result<DatabaseConnection> {
+        let info = connect(Some((
+            options.namespace.as_str(),
+            options.database.as_str(),
+        )))
+        .await?;
+        Ok(info.connection)
+    }
+
+    async fn wait_for_mail(from: i64, mail: &str) -> Result<()> {
+        let tag = mail.split(".").nth(1).unwrap().split("@").next().unwrap();
+
+        match reqwest::Client::new()
+            .get("https://api.testmail.app/api/json")
+            .query(&[
+                ("apikey", std::env::var("TEST_MAIL_KEY").unwrap()),
+                ("namespace", std::env::var("TEST_MAIL_NAMESPACE").unwrap()),
+                ("tag", tag.to_string()),
+                ("timestamp_from", from.to_string()),
+                ("livequery", "true".to_string()),
+            ])
+            .timeout(Duration::from_secs(5))
+            .send()
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(_) => Err(ApplicationError::Unauthorized),
+        }
     }
 
     #[tokio::test]
     async fn test_signup() -> Result<()> {
-        let info = connect().await?;
+        let info = connect(None).await?;
         let connection = &info.connection;
 
         connection
@@ -228,9 +244,9 @@ mod tests {
         Ok(())
     }
 
-    async fn init() -> Result<DatabaseConnection> {
-        let info = connect().await?;
-        let connection = &info.connection;
+    async fn init(info: &ConnectionInfo) -> Result<DatabaseConnection> {
+        let connection = info.connection.clone();
+        let root = connection.clone();
 
         connection
             .signup(Scope {
@@ -246,7 +262,39 @@ mod tests {
             })
             .await?;
 
-        Ok(info.connection)
+        root.query(
+            "LET $account = SELECT * FROM account WHERE mail = $mail;\
+                 FOR $permission IN $permissions {\
+                    RELATE $account->has->(type::thing(\"permission\", $permission));
+                 };",
+        )
+        .bind(("mail", TEST_MAIL.as_str()))
+        .await?
+        .check()?;
+
+        Ok(connection)
+    }
+
+    async fn second(info: &ConnectionInfo) -> Result<DatabaseConnection> {
+        let connection = connect(Some((info.namespace.as_str(), info.database.as_str())))
+            .await?
+            .connection;
+
+        connection
+            .signup(Scope {
+                namespace: info.namespace.as_str(),
+                database: info.database.as_str(),
+                scope: "account",
+                params: &json!({
+                    "first": "second",
+                    "last": "last",
+                    "mail": TEST_MAIL2.as_str(),
+                    "password": "password"
+                }),
+            })
+            .await?;
+
+        Ok(connection)
     }
 
     #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -281,7 +329,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_account_update() -> Result<()> {
-        let connection = init().await?;
+        let connection = init(&connect(None).await?).await?;
         let account = fetch_account(&connection).await?;
 
         let updated: Account = connection
@@ -313,6 +361,97 @@ mod tests {
             }))
             .await
             .is_err());
+
+        Ok(())
+    }
+
+    #[derive(Deserialize, Serialize, Debug, Clone)]
+    struct TaskRequest {
+        id: Thing,
+        title: String,
+        description: String,
+        due: Option<String>,
+        state: String,
+    }
+
+    async fn create_task_request(connection: &DatabaseConnection) -> Result<TaskRequest> {
+        let request: Vec<TaskRequest> = connection
+            .create("task_request")
+            .content(&json!({
+                "title": "title",
+                "description": "description"
+            }))
+            .await?;
+
+        Ok(request.first().unwrap().clone())
+    }
+
+    #[tokio::test]
+    async fn test_task_request_creation() -> Result<()> {
+        let info = connect(None).await?;
+        let admin = init(&info).await?;
+        let client = second(&info).await?;
+        let root = root(&info).await?;
+
+        let from = Utc::now().timestamp();
+        create_task_request(&client).await?;
+        assert!(wait_for_mail(from, TEST_MAIL.as_str()).await.is_err());
+        crate::hook::mail::mail_hook(&root).await?;
+
+        admin
+            .query(
+                "UPDATE account SET options.notify_task_request_created = true WHERE mail = $mail",
+            )
+            .bind(("mail", TEST_MAIL.as_str()))
+            .await?
+            .check()?;
+        let from = Utc::now().timestamp();
+        create_task_request(&client).await?;
+        crate::hook::mail::mail_hook(&root).await?;
+        assert!(wait_for_mail(from, TEST_MAIL.as_str()).await.is_ok());
+
+        Ok(())
+    }
+
+    #[derive(Deserialize, Serialize, Clone, Debug)]
+    pub struct Message {
+        id: Thing,
+        content: String,
+        reference: Thing,
+        author: Thing,
+        internal: bool,
+    }
+
+    #[tokio::test]
+    async fn test_send_message() -> Result<()> {
+        let info = connect(None).await?;
+        let client = second(&info).await?;
+        let admin = init(&info).await?;
+
+        // as record() types are not supported in the rust-sdk this will always fail
+        // let request = create_task_request(&client).await?;
+        // let message: Vec<Message> = client
+        //     .create("message")
+        //     .content(&json!({
+        //         "content": "test",
+        //         "reference": &request.id
+        //     }))
+        //     .await?;
+        // let message = message.first().unwrap();
+        //
+        // let messages: Vec<Message> = admin.select("message").await?;
+        // assert_eq!(1, messages.len());
+        //
+        // let _: Vec<Message> = admin
+        //     .create("message")
+        //     .content(&json!({
+        //         "content": "test",
+        //         "reference": &request.id,
+        //         "internal": true
+        //     }))
+        //     .await?;
+        // let messages: Vec<Message> = client.select("message").await?;
+        // assert_eq!(1, messages.len());
 
         Ok(())
     }

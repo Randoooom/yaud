@@ -18,6 +18,19 @@
 use crate::prelude::*;
 use surrealdb::sql::Thing;
 
+pub mod mail;
+
+#[derive(Debug, Clone, Deserialize, Serialize, EnumString, AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum ActionType {
+    CreatedTaskMessage,
+    CreatedTaskRequestMessage,
+    CreatedTaskRequest,
+    UpdatedTaskState,
+    UpdatedTaskRequestState,
+}
+
 #[derive(Deserialize, Debug)]
 struct Hook {
     id: Thing,
@@ -38,7 +51,14 @@ pub async fn hook(connection: &DatabaseConnection) -> Result<()> {
     );
 
     if let Some(hook) = hook {
-        // TODO: do captain hook things
+        tokio::select! {
+            result = mail::mail_hook(connection) => {
+                match result {
+                    Ok(()) => {},
+                    Err(error) => error!("Error occurred during mail hook: {}", error)
+                }
+            }
+        };
 
         // update the hook
         let _: Option<Hook> = sql_span!(

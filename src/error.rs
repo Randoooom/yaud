@@ -31,6 +31,8 @@ pub enum ApplicationError {
     InternalServerError,
     #[error(transparent)]
     IoError(#[from] std::io::Error),
+    #[error(transparent)]
+    SMTPError(#[from] lettre::transport::smtp::Error),
 }
 
 pub type Result<T> = std::result::Result<T, ApplicationError>;

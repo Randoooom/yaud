@@ -21,6 +21,7 @@ DEFINE PARAM $types VALUE [
 ];
 
 DEFINE PARAM $permissions VALUE [
+    "admin",
     "task.request.select",
     "task.request.edit",
     "task.request.delete",
@@ -29,10 +30,40 @@ DEFINE PARAM $permissions VALUE [
     "task.select"
 ];
 
+DEFINE PARAM $mailStates VALUE [
+    "pending",
+    "processing",
+    "delivered"
+];
+
+DEFINE TABLE permission SCHEMAFULL;
+
+FOR $permission in $permissions {
+    LET $identifier = type::thing("permission", $permission);
+
+    IF array::len(SELECT * FROM $identifier) = 0 THEN
+        CREATE $identifier;
+    END;
+};
+
+DEFINE TABLE has SCHEMALESS
+    PERMISSIONS
+        FOR update, delete, create
+            WHERE fn::has_permission($auth.id, type::thing("permission", "admin"))
+        FOR select FULL;
+
+DEFINE PARAM $taskRequestStates VALUE [
+    "received",
+    "evaluation",
+    "accepted",
+    "rejected"
+];
+
 DEFINE TABLE mail SCHEMAFULL PERMISSIONS NONE;
     DEFINE FIELD recipient  on TABLE mail   TYPE string ASSERT string::is::email($value);
     DEFINE FIELD type       on TABLE mail   TYPE string ASSERT $value IN $types;
-    DEFINE FIELD delivered  on TABLE mail   TYPE bool DEFAULT false;
+    DEFINE FIELD state      on TABLE mail   TYPE string DEFAULT "pending" ASSERT $value IN $mailStates;
+    DEFINE FIELD locale     on TABLE mail   TYPE string DEFAULT "en";
     DEFINE FIELD updated_at on TABLE mail   TYPE datetime DEFAULT time::now() VALUE time::now();
     DEFINE FIELD created_at on TABLE mail   TYPE datetime DEFAULT time::now();
 
@@ -44,6 +75,7 @@ DEFINE TABLE account SCHEMAFULL
     DEFINE FIELD last_name  ON TABLE account        TYPE string;
     DEFINE FIELD mail       ON TABLE account        TYPE string ASSERT string::is::email($value);
     DEFINE FIELD password   on TABLE account        TYPE string;
+    DEFINE FIELD locale     ON TABLE account        TYPE string DEFAULT "en";
     DEFINE FIELD options    on TABLE account        TYPE object DEFAULT {};
     DEFINE FIELD options.notify_task_request_created    on TABLE account TYPE bool DEFAULT false
         PERMISSIONS
@@ -71,7 +103,6 @@ DEFINE SCOPE account SESSION 1h
     )
 ;
 
-DEFINE TABLE permission SCHEMAFULL;
 
 DEFINE FUNCTION fn::has_permission($account: record(account), $permission: record(permission)) {
     LET $result = SELECT $permission INSIDE ->has->permission.id AS result FROM $account;
@@ -104,10 +135,12 @@ DEFINE TABLE task_request SCHEMAFULL
             $auth.id = customer.id OR
             fn::has_permission($auth.id, type::thing("permission", "task.request.select"));
     DEFINE FIELD title       on TABLE task_request TYPE string;
-    DEFINE FIELD customer    on TABLE task_request TYPE record(account);
+    DEFINE FIELD customer    on TABLE task_request TYPE record(account) DEFAULT $auth.id
+        PERMISSIONS FOR update
+            WHERE fn::has_permission($auth.id, type::thing("permission", "task.request.edit"));
     DEFINE FIELD description on TABLE task_request TYPE string;
-    DEFINE FIELD due         on TABLE task_request TYPE string;
-    DEFINE FIELD state       on TABLE task_request TYPE string;
+    DEFINE FIELD due         on TABLE task_request TYPE option<string>;
+    DEFINE FIELD state       on TABLE task_request TYPE string DEFAULT "received" ASSERT $value IN $taskRequestStates;
     DEFINE FIELD updated_at  on TABLE task_request TYPE datetime    DEFAULT time::now() VALUE time::now();
     DEFINE FIELD created_at  on TABLE task_request TYPE datetime    DEFAULT time::now();
 
@@ -118,11 +151,12 @@ DEFINE EVENT created on TABLE task_request WHEN $event = "CREATE" THEN {
         by: $value.customer.id,
     };
 
-    LET $accounts = (SELECT mail FROM account WHERE options.notify_task_request_created AND fn::has_permission(account.id, type::thing("permission", "task.request.select")));
+    LET $accounts = (SELECT id, mail, locale FROM account WHERE options.notify_task_request_created AND fn::has_permission(id, type::thing("permission", "task.request.select")));
     FOR $account IN $accounts {
        CREATE mail CONTENT {
            recipient: $account.mail,
-           type: "created_task_request"
+           type: "created_task_request",
+           locale: $account.locale
        };
     };
 
@@ -139,7 +173,8 @@ DEFINE EVENT task_request_state_updated on TABLE task_request WHEN $event = "UPD
     IF $value.customer.options.notify_state_updated THEN
         CREATE mail CONTENT {
             recipient: $value.customer.mail,
-            type: "updated_task_request_state"
+            type: "updated_task_request_state",
+            locale: $value.customer.locale
         };
     END;
 
@@ -170,7 +205,9 @@ DEFINE TABLE task SCHEMAFULL
             WHERE $auth.id = customer.id OR
                   fn::has_permission($auth.id, type::thing("permission", "task.select"));
     DEFINE FIELD title       on TABLE task TYPE string;
-    DEFINE FIELD customer    on TABLE task TYPE string;
+    DEFINE FIELD customer    on TABLE task TYPE record(account) DEFAULT $auth.id
+        PERMISSIONS FOR update
+            WHERE fn::has_permission($auth.id, type::thing("permission", "task.edit"));
     DEFINE FIELD description on TABLE task TYPE string;
     DEFINE FIELD due         on TABLE task TYPE datetime;
     DEFINE FIELD state       on TABLE task TYPE string;
@@ -188,7 +225,8 @@ DEFINE EVENT task_state_updated on TABLE task WHEN $event = "UPDATE" AND $before
     IF $value.customer.options.notify_state_updated THEN
         CREATE mail CONTENT {
             recipient: $value.customer.mail,
-            type: "updated_task_state"
+            type: "updated_task_state",
+            locale: $value.customer.locale
         };
     END;
 
@@ -208,7 +246,7 @@ DEFINE TABLE message SCHEMAFULL
                     fn::has_permission($auth.id, type::thing("permission", "task.select"));
     DEFINE FIELD content    on TABLE message TYPE string PERMISSIONS FOR update WHERE $auth.id = author.id;
     DEFINE FIELD reference  on TABLE message TYPE record() PERMISSIONS FOR update, delete NONE FOR select, create WHERE reference.id = $auth.id OR fn::has_permission($auth.id, type::thing("permission", "task.select"));
-    DEFINE FIELD author     on TABLE message TYPE record(account) VALUE $before OR $auth.id PERMISSIONS NONE;
+    DEFINE FIELD author     on TABLE message TYPE record(account) DEFAULT $auth.id PERMISSIONS NONE;
     DEFINE FIELD internal   on TABLE message TYPE bool     DEFAULT false PERMISSIONS FOR create, update WHERE fn::has_permission($auth.id, type::thing("permission", "task.select"));
     DEFINE FIELD updated_at on TABLE task TYPE datetime    DEFAULT time::now() VALUE time::now();
     DEFINE FIELD created_at on TABLE task TYPE datetime    DEFAULT time::now();
@@ -228,18 +266,19 @@ DEFINE EVENT created_message on TABLE message WHEN $event = "CREATE" THEN {
     };
 
     LET $accounts = (
-        SELECT mail FROM account WHERE
+        SELECT id, mail, locale FROM account WHERE
             options.notify_message_created AND
             id != $value.author.id AND
                 (
                     $value.reference.customer.id = $auth.id OR
-                    fn::has_permission(account.id, type::thing("permission", "task.select"))
+                    fn::has_permission(id, type::thing("permission", "task.select"))
                 )
     );
     FOR $account IN $accounts {
        CREATE mail CONTENT {
            recipient: $account.mail,
-           type: "created_task_message"
+           type: "created_task_message",
+           locale: $account.locale
        };
     };
 
