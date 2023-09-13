@@ -6,33 +6,31 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-yaud-codegen = { path = "./yaud-codegen" }
+yaud-dioxus = { path = "./yaud-dioxus" }
 
-aide = { version = "0.11.0", features = ["redoc", "axum", "axum-extra-cookie", "macros"] }
-axum = { version = "0.6.19", features = ["macros", "multipart"] }
-axum-extra = { version = "0.7.5", features = ["cookie"] }
-axum-jsonschema = { version = "0.6.0", features = ["aide"] }
-axum-test-helper = { version = "0.3.0", features = ["withouttrace", "cookies"] }
-schemars = { version = "0.8.12", features = ["chrono"] }
-serde = { version = "1.0.176", features = ["derive"] }
-surrealdb = "1.0.0-beta.11"
-tokio = { version = "1.29.1", features = ["full"] }
-totp-rs = { version = "5.1.0", features = ["qr", "gen_secret"] }
-tower-http = { version = "0.4.3", features = ["fs", "tracing", "cors"] }
-tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
-
-argon2 = "0.5.1"
-async-trait = "0.1.72"
-axum-macros = "0.3.8"
 cfg-if = "1.0.0"
-chacha20poly1305 = "0.10.1"
-chrono = "0.4.26"
+envy = "0.4.2"
 getset = "0.1.2"
-hcaptcha = "2.2.2"
+kanal = "0.1.0-pre8"
 lazy_static = "1.4.0"
-nanoid = "0.4.0"
-openssl = "0.10.55"
+lettre = { version = "0.10.4", features = ["tokio1-native-tls"] }
+serde = { version = "1.0.176", features = ["derive"] }
 serde_json = "1.0.104"
+strum = { version = "0.25.0", features = ["derive"] }
+surrealdb = { git = "https://github.com/surrealdb/surrealdb.git", rev = "28368d83c945b01c1a8cbc6aea1f88595177ef8d" }
 thiserror = "1.0.44"
+tokio = { version = "1.29.1", features = ["full"] }
 tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
+rust-i18n = "2.1.0"
 version-compare = "0.1.1"
+
+[features]
+default = []
+ssr = ["yaud-dioxus/ssr"]
+web = ["yaud-dioxus/web"]
+
+[dev-dependencies]
+chrono = "0.4.26"
+nanoid = "0.4.0"
+reqwest = { version = "0.11.18", features = ["json"] }

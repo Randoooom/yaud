@@ -15,11 +15,7 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-use crate::prelude::*;
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
-
-#[derive(Error, Debug, OperationIo)]
+#[derive(Error, Debug)]
 pub enum ApplicationError {
     #[error("Unauthorized")]
     Unauthorized,
@@ -35,67 +31,8 @@ pub enum ApplicationError {
     InternalServerError,
     #[error(transparent)]
     IoError(#[from] std::io::Error),
-}
-
-#[derive(Serialize, Debug, JsonSchema)]
-pub struct ApplicationErrorResponse {
-    error: String,
+    #[error(transparent)]
+    SMTPError(#[from] lettre::transport::smtp::Error),
 }
 
 pub type Result<T> = std::result::Result<T, ApplicationError>;
-
-macro_rules! log_test_error {
-    ($error:expr) => {
-        #[cfg(test)]
-        {
-            println!("Err: {:?}", $error.to_string());
-        }
-    };
-}
-
-macro_rules! impl_from_error {
-    ($from:path, $to:path) => {
-        impl From<$from> for ApplicationError {
-            fn from(_: $from) -> Self {
-                $to
-            }
-        }
-    };
-}
-
-impl_from_error!(argon2::Error, ApplicationError::Unauthorized);
-impl_from_error!(argon2::password_hash::Error, ApplicationError::Unauthorized);
-impl_from_error!(hcaptcha::HcaptchaError, ApplicationError::Unauthorized);
-
-impl IntoResponse for ApplicationError {
-    fn into_response(self) -> Response {
-        match self {
-            ApplicationError::Unauthorized => (
-                StatusCode::UNAUTHORIZED,
-                Json(json!({"error": "Unauthorized"})),
-            ),
-            ApplicationError::BadRequest(error) => {
-                log_test_error!(error);
-                (StatusCode::BAD_REQUEST, Json(json!({ "error": error })))
-            }
-            ApplicationError::Forbidden(error) => {
-                log_test_error!(error);
-                (StatusCode::FORBIDDEN, Json(json!({ "error": error })))
-            }
-            _ => {
-                error!("Err: {}", self.to_string());
-
-                #[cfg(test)]
-                {
-                    println!("Err: {:?}", self.to_string());
-                }
-
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"error": "Error occurred while processing the request"})),
-                )
-            }
-        }
-        .into_response()
-    }
-}

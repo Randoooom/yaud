@@ -18,12 +18,6 @@
 #[macro_use]
 extern crate serde;
 #[macro_use]
-extern crate schemars;
-#[macro_use]
-extern crate async_trait;
-#[macro_use]
-extern crate aide;
-#[macro_use]
 extern crate thiserror;
 #[macro_use]
 extern crate getset;
@@ -32,98 +26,107 @@ extern crate tracing;
 #[macro_use]
 extern crate serde_json;
 #[macro_use]
-extern crate axum_macros;
+extern crate rust_i18n;
 #[macro_use]
-extern crate hcaptcha;
+extern crate strum;
 #[macro_use]
-extern crate yaud_codegen;
+extern crate lazy_static;
 
-use crate::database::ConnectionInfo;
-use crate::prelude::*;
-use aide::axum::ApiRouter;
-use aide::openapi::OpenApi;
-use axum::http::{header, Method};
-use axum::{BoxError, Extension, Router};
-use std::net::SocketAddr;
-use std::sync::Arc;
-use tower_http::cors::CorsLayer;
+use crate::error::ApplicationError;
+use std::ops::Deref;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-mod auth;
 mod database;
 mod error;
-mod routes;
-mod state;
+mod hook;
 
-#[cfg(test)]
-mod tests;
+const HOOK_INTERVAL: u64 = 10000;
 
-pub async fn router(connection: ConnectionInfo) -> std::result::Result<Router, BoxError> {
-    let state = ApplicationState::from(connection);
+i18n!("locales", fallback = "en");
 
-    aide::gen::extract_schemas(true);
-    let mut api = OpenApi::default();
+#[derive(Deserialize, Debug, Clone)]
+pub struct Config {
+    surrealdb_endpoint: String,
+    surrealdb_username: String,
+    surrealdb_password: String,
+    smtp_host: String,
+    smtp_username: String,
+    smtp_password: String,
+    #[cfg(test)]
+    test_mail: String,
+    #[cfg(test)]
+    test_mail2: String,
+    #[cfg(test)]
+    test_mail_key: String,
+    #[cfg(test)]
+    test_mail_namespace: String,
+}
 
-    Ok(ApiRouter::new()
-        .nest_api_service("/docs", routes::openapi::router(state.clone()))
-        .nest_api_service("/", routes::router(state))
-        .finish_api_with(&mut api, routes::openapi::transform_api)
-        .layer(
-            CorsLayer::new()
-                .allow_origin([DOMAIN.parse().unwrap()])
-                .allow_methods(vec![
-                    Method::GET,
-                    Method::POST,
-                    Method::PUT,
-                    Method::DELETE,
-                    Method::HEAD,
-                    Method::OPTIONS,
-                ])
-                .allow_headers(vec![
-                    header::AUTHORIZATION,
-                    header::CONTENT_TYPE,
-                    header::CONTENT_DISPOSITION,
-                ])
-                .expose_headers(vec![header::CONTENT_DISPOSITION]),
-        )
-        .layer(Extension(Arc::new(api))))
+lazy_static! {
+    pub static ref CONFIGURATION: Config = envy::from_env::<Config>().unwrap();
+}
+
+fn app(context: Scope) -> Element {
+    yaud_dioxus::app(context)
 }
 
 #[tokio::main]
-async fn main() -> std::result::Result<(), BoxError> {
-    let _ = std::env::var("HCAPTCHA_SECRET").expect("HCAPTCHA_SECRET NOT FOUND");
-    let _ = std::env::var("DOMAIN").expect("DOMAIN NOT FOUND");
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    lazy_static::initialize(&CONFIGURATION);
 
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::from_default_env())
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let address = SocketAddr::from(([0, 0, 0, 0], 8000));
-    info!("starting on http://0.0.0.0:8000");
-    let connection = database::connect().await?;
-    axum::Server::bind(&address)
-        .serve(router(connection).await?.into_make_service())
-        .await
-        .unwrap();
+    let (hook_sender, hook_receiver) = kanal::unbounded_async();
+    let (dioxus_sender, dioxus_receiver) = kanal::unbounded_async();
 
+    let info = database::connect(None).await?;
+    let connection = info.connection;
+
+    // as the surrealdb rust-sdk currently does not support live queries we have to adapt here
+    // and are regularly checking for new hook triggers.
+    tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                result = hook::hook(&connection) => {
+                    match result {
+                        Ok(()) => {},
+                        Err(error) => error!("Error occurred during hook: {}", error),
+                    }
+
+                    tokio::time::sleep(std::time::Duration::from_millis(HOOK_INTERVAL)).await;
+                },
+                _ = hook_receiver.recv() => {
+                    warn!("Received shutdown signal on kanal receiver");
+                    break;
+                }
+            }
+        }
+
+        Ok::<(), ApplicationError>(())
+    });
+
+    tokio::spawn(async move { yaud_dioxus::launch().await });
+
+    match tokio::signal::ctrl_c().await {
+        Ok(()) => {}
+        Err(error) => {
+            error!("Unable to listen for shutdown signal: {}", error);
+            hook_sender.send(true).await?;
+        }
+    }
+
+    info!("Received shutdown signal... Shutting down...");
+    // shutdown
+    hook_sender.send(true).await?;
     Ok(())
 }
 
 pub mod prelude {
-    pub use crate::auth::authz::permission::*;
-    pub use crate::database::id::Id;
-    pub use crate::database::page::Page;
-    pub use crate::database::relation::Relation;
     pub use crate::database::DatabaseConnection;
     pub use crate::error::*;
-    pub use crate::routes::extractor::*;
-    pub use crate::state::*;
-    pub use crate::{require_session, sql_span};
-
-    lazy_static::lazy_static! {
-        pub static ref HCAPTCHA_SECRET: String = std::env::var("HCAPTCHA_SECRET").expect("HCAPTCHA_SECRET NOT FOUND");
-        pub static ref DOMAIN: String = std::env::var("DOMAIN").expect("DOMAIN NOT FOUND");
-    }
+    pub use crate::sql_span;
 }
