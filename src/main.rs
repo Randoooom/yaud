@@ -33,7 +33,6 @@ extern crate strum;
 extern crate lazy_static;
 
 use crate::error::ApplicationError;
-use std::ops::Deref;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -67,10 +66,6 @@ lazy_static! {
     pub static ref CONFIGURATION: Config = envy::from_env::<Config>().unwrap();
 }
 
-fn app(context: Scope) -> Element {
-    yaud_dioxus::app(context)
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     lazy_static::initialize(&CONFIGURATION);
@@ -80,8 +75,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let (hook_sender, hook_receiver) = kanal::unbounded_async();
-    let (dioxus_sender, dioxus_receiver) = kanal::unbounded_async();
+    let (hook_sender, hook_receiver) = kanal::unbounded_async::<bool>();
+    let (dioxus_sender, dioxus_receiver) = kanal::unbounded_async::<bool>();
 
     let info = database::connect(None).await?;
     let connection = info.connection;
@@ -109,19 +104,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok::<(), ApplicationError>(())
     });
 
-    tokio::spawn(async move { yaud_dioxus::launch().await });
+    tokio::spawn(async move { yaud_dioxus::launch(dioxus_receiver) });
 
     match tokio::signal::ctrl_c().await {
         Ok(()) => {}
         Err(error) => {
             error!("Unable to listen for shutdown signal: {}", error);
             hook_sender.send(true).await?;
+            dioxus_sender.send(true).await?;
         }
     }
 
     info!("Received shutdown signal... Shutting down...");
     // shutdown
     hook_sender.send(true).await?;
+    dioxus_sender.send(true).await?;
     Ok(())
 }
 

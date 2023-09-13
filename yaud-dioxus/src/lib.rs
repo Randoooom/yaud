@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_fullstack::prelude::*;
+use kanal::AsyncReceiver;
 
 pub fn app(cx: Scope) -> Element {
     let mut count = use_state(cx, || 0);
@@ -11,6 +12,6 @@ pub fn app(cx: Scope) -> Element {
     })
 }
 
-pub fn launch() {
+pub fn launch(receiver: AsyncReceiver<bool>) {
     LaunchBuilder::new(app).launch()
 }
