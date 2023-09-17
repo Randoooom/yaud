@@ -15,3 +15,8 @@ Cargo.lock
 /target
 
 .idea/
+
+# Dioxus
+.env
+node_modules/
+dist/

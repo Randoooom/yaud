@@ -1,0 +1,50 @@
+//     Copyright (C) 2023  Fritz Ochsmann
+//
+//     This program is free software: you can redistribute it and/or modify
+//     it under the terms of the GNU Affero General Public License as published
+//     by the Free Software Foundation, either version 3 of the License, or
+//     (at your option) any later version.
+//
+//     This program is distributed in the hope that it will be useful,
+//     but WITHOUT ANY WARRANTY; without even the implied warranty of
+//     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//     GNU Affero General Public License for more details.
+//
+//     You should have received a copy of the GNU Affero General Public License
+//     along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+@import "../colors"
+
+#yaud
+  .y-btn
+    @apply p-2 uppercase cursor-pointer rounded-md
+    transition: all 0.15s ease-in-out
+    font-size: 0.875rem
+    font-weight: 500
+    letter-spacing: 0.0893em
+    text-indent: 0.0893em
+
+    &:hover
+      backdrop-filter: brightness(1.05)
+
+  .y-btn--variant-text
+    background: transparent
+
+  .y-btn--variant-icon
+    border-radius: 50%
+
+  .y-btn--color-transparent
+    color: white
+
+  .y-btn--color-transparent.y-btn--variant-tonal
+    background: rgba(255, 255, 255, 0.15)
+
+  @each $color in $colors
+    $identifier: --color-#{$color}
+    @apply text-#{$color}
+
+    .y-btn--color-#{$color}
+      color: rgb(var(#{$identifier}))
+
+    .y-btn--color-#{$color}.y-btn--variant-tonal
+      background: rgba(var(#{$identifier}), 0.15)

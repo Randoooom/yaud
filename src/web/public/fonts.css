@@ -1,0 +1,55 @@
+/*
+ *     Copyright (C) 2023  Fritz Ochsmann
+ *
+ *     This program is free software: you can redistribute it and/or modify
+ *     it under the terms of the GNU Affero General Public License as published
+ *     by the Free Software Foundation, either version 3 of the License, or
+ *     (at your option) any later version.
+ *
+ *     This program is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *     GNU Affero General Public License for more details.
+ *
+ *     You should have received a copy of the GNU Affero General Public License
+ *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+@font-face {
+    font-family: "Poppins";
+    font-weight: 600;
+    src: url("fonts/Poppins-SemiBold.ttf") format("truetype");
+}
+
+@font-face {
+    font-family: "Poppins";
+    font-weight: 600;
+    font-style: italic;
+    src: url("fonts/Poppins-SemiBoldItalic.ttf") format("truetype");
+}
+
+.poppins {
+    font-family: "Poppins", sans-serif;
+    font-weight: 600;
+}
+
+@font-face {
+    font-display: swap;
+    font-family: "Roboto";
+    font-style: normal;
+    font-weight: 400;
+    src: url("fonts/roboto-v30-latin-regular.woff2") format("woff2");
+}
+
+@font-face {
+    font-display: swap;
+    font-family: "Roboto";
+    font-style: normal;
+    font-weight: 500;
+    src: url("fonts/roboto-v30-latin-500.woff2") format("woff2");
+}
+
+html {
+    font-family: "Roboto", sans-serif;
+}
+

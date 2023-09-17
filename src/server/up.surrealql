@@ -36,6 +36,13 @@ DEFINE PARAM $mailStates VALUE [
     "delivered"
 ];
 
+DEFINE PARAM $templatePages VALUE [
+    "home",
+    "imprint",
+    "privacy",
+    "toc"
+];
+
 DEFINE TABLE permission SCHEMAFULL;
 
 FOR $permission in $permissions {
@@ -284,3 +291,15 @@ DEFINE EVENT created_message on TABLE message WHEN $event = "CREATE" THEN {
 
     CREATE ONLY hook;
 };
+
+DEFINE TABLE template SCHEMAFULL;
+    DEFINE FIELD title      ON TABLE template TYPE string;
+    DEFINE FIELD html_title ON TABLE template TYPE string;
+    DEFINE FIELD body       ON TABLE template TYPE string;
+    DEFINE FIELD updated_at ON TABLE template TYPE datetime    DEFAULT time::now() VALUE time::now();
+    DEFINE FIELD created_at ON TABLE template TYPE datetime    DEFAULT time::now();
+
+DEFINE TABLE page SCHEMAFULL;
+    DEFINE FIELD type       ON TABLE page TYPE string ASSERT $value IN $templatePages;
+    DEFINE FIELD template   ON TABLE page TYPE record(template);
+    DEFINE FIELD updated_at ON TABLE template TYPE datetime    DEFAULT time::now() VALUE time::now();

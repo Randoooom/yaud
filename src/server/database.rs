@@ -17,7 +17,6 @@
 
 use crate::prelude::*;
 
-use crate::CONFIGURATION;
 use surrealdb::engine::remote::ws::{Client, Ws};
 use surrealdb::opt::auth::Root;
 use surrealdb::Surreal;

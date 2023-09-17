@@ -1,0 +1,40 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+    mode: "all",
+    content: [
+        "./src/**/*.{rs,html,css}",
+        "./dist/**/*.html",
+        "assets/styles/**/*.sass",
+        "assets/styles/**/*.css"
+    ],
+    theme: {
+        colors: {
+            "primary": "rgb(var(--color-primary))",
+            "on-primary": "rgb(var(--color-on-primary))",
+            "primary-container": "rgb(var(--color-primary-container))",
+            "on-primary-container": "rgb(var(--color-on-primary-container))",
+            "secondary": "rgb(var(--color-secondary))",
+            "on-secondary": "rgb(var(--color-on-secondary))",
+            "secondary-container": "rgb(var(--color-secondary-container))",
+            "on-secondary-container": "rgb(var(--color-on-secondary-container))",
+            "tertiary": "rgb(var(--color-tertiary))",
+            "on-tertiary": "rgb(var(--color-on-tertiary))",
+            "tertiary-container": "rgb(var(--color-tertiary-container))",
+            "on-tertiary-container": "rgb(var(--color-on-tertiary-container))",
+            "error": "rgb(var(--color-error))",
+            "error-container": "rgb(var(--color-error-container))",
+            "on-error": "rgb(var(--color-on-error))",
+            "on-error-container": "rgb(var(--color-on-error-container))",
+            "background": "rgb(var(--color-background))",
+            "on-background": "rgb(var(--color-on-background))",
+            "surface": "rgb(var(--color-surface))",
+            "on-surface": "rgb(var(--color-on-surface))",
+            "surface-variant": "rgb(var(--color-surface-variant))",
+            "on-surface-variant": "rgb(var(--color-on-surface-variant))",
+            "outline": "rgb(var(--color-outline))",
+            "shadow": "rgb(var(--color-shadow))",
+            "outline-variant": "rgb(var(--color-outline-variant))",
+        },
+    },
+    plugins: [],
+}

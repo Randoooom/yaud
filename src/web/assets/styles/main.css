@@ -1,0 +1,203 @@
+/*!     Copyright (C) 2023  Fritz Ochsmann */
+#yaud {
+  @apply text-primary;
+  @apply text-on-primary;
+  @apply text-primary-container;
+  @apply text-on-primary-container;
+  @apply text-secondary;
+  @apply text-on-secondary;
+  @apply text-secondary-container;
+  @apply text-on-secondary-container;
+  @apply text-tertiary;
+  @apply text-on-tertiary;
+  @apply text-tertiary-container;
+  @apply text-on-tertiary-container;
+  @apply text-error;
+  @apply text-error-container;
+  @apply text-on-error;
+  @apply text-on-error-container;
+  @apply text-background;
+  @apply text-on-background;
+  @apply text-surface;
+  @apply text-on-surface;
+  @apply text-surface-variant;
+  @apply text-on-surface-variant;
+  @apply text-outline;
+  @apply text-shadow;
+  @apply text-outline-variant;
+}
+#yaud .y-btn {
+  @apply p-2 uppercase cursor-pointer rounded-md;
+  transition: all 0.15s ease-in-out;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.0893em;
+  text-indent: 0.0893em;
+}
+#yaud .y-btn:hover {
+  backdrop-filter: brightness(1.05);
+}
+#yaud .y-btn--variant-text {
+  background: transparent;
+}
+#yaud .y-btn--variant-icon {
+  border-radius: 50%;
+}
+#yaud .y-btn--color-transparent {
+  color: white;
+}
+#yaud .y-btn--color-transparent.y-btn--variant-tonal {
+  background: rgba(255, 255, 255, 0.15);
+}
+#yaud .y-btn--color-primary {
+  color: rgb(var(--color-primary));
+}
+#yaud .y-btn--color-primary.y-btn--variant-tonal {
+  background: rgba(var(--color-primary), 0.15);
+}
+#yaud .y-btn--color-on-primary {
+  color: rgb(var(--color-on-primary));
+}
+#yaud .y-btn--color-on-primary.y-btn--variant-tonal {
+  background: rgba(var(--color-on-primary), 0.15);
+}
+#yaud .y-btn--color-primary-container {
+  color: rgb(var(--color-primary-container));
+}
+#yaud .y-btn--color-primary-container.y-btn--variant-tonal {
+  background: rgba(var(--color-primary-container), 0.15);
+}
+#yaud .y-btn--color-on-primary-container {
+  color: rgb(var(--color-on-primary-container));
+}
+#yaud .y-btn--color-on-primary-container.y-btn--variant-tonal {
+  background: rgba(var(--color-on-primary-container), 0.15);
+}
+#yaud .y-btn--color-secondary {
+  color: rgb(var(--color-secondary));
+}
+#yaud .y-btn--color-secondary.y-btn--variant-tonal {
+  background: rgba(var(--color-secondary), 0.15);
+}
+#yaud .y-btn--color-on-secondary {
+  color: rgb(var(--color-on-secondary));
+}
+#yaud .y-btn--color-on-secondary.y-btn--variant-tonal {
+  background: rgba(var(--color-on-secondary), 0.15);
+}
+#yaud .y-btn--color-secondary-container {
+  color: rgb(var(--color-secondary-container));
+}
+#yaud .y-btn--color-secondary-container.y-btn--variant-tonal {
+  background: rgba(var(--color-secondary-container), 0.15);
+}
+#yaud .y-btn--color-on-secondary-container {
+  color: rgb(var(--color-on-secondary-container));
+}
+#yaud .y-btn--color-on-secondary-container.y-btn--variant-tonal {
+  background: rgba(var(--color-on-secondary-container), 0.15);
+}
+#yaud .y-btn--color-tertiary {
+  color: rgb(var(--color-tertiary));
+}
+#yaud .y-btn--color-tertiary.y-btn--variant-tonal {
+  background: rgba(var(--color-tertiary), 0.15);
+}
+#yaud .y-btn--color-on-tertiary {
+  color: rgb(var(--color-on-tertiary));
+}
+#yaud .y-btn--color-on-tertiary.y-btn--variant-tonal {
+  background: rgba(var(--color-on-tertiary), 0.15);
+}
+#yaud .y-btn--color-tertiary-container {
+  color: rgb(var(--color-tertiary-container));
+}
+#yaud .y-btn--color-tertiary-container.y-btn--variant-tonal {
+  background: rgba(var(--color-tertiary-container), 0.15);
+}
+#yaud .y-btn--color-on-tertiary-container {
+  color: rgb(var(--color-on-tertiary-container));
+}
+#yaud .y-btn--color-on-tertiary-container.y-btn--variant-tonal {
+  background: rgba(var(--color-on-tertiary-container), 0.15);
+}
+#yaud .y-btn--color-error {
+  color: rgb(var(--color-error));
+}
+#yaud .y-btn--color-error.y-btn--variant-tonal {
+  background: rgba(var(--color-error), 0.15);
+}
+#yaud .y-btn--color-error-container {
+  color: rgb(var(--color-error-container));
+}
+#yaud .y-btn--color-error-container.y-btn--variant-tonal {
+  background: rgba(var(--color-error-container), 0.15);
+}
+#yaud .y-btn--color-on-error {
+  color: rgb(var(--color-on-error));
+}
+#yaud .y-btn--color-on-error.y-btn--variant-tonal {
+  background: rgba(var(--color-on-error), 0.15);
+}
+#yaud .y-btn--color-on-error-container {
+  color: rgb(var(--color-on-error-container));
+}
+#yaud .y-btn--color-on-error-container.y-btn--variant-tonal {
+  background: rgba(var(--color-on-error-container), 0.15);
+}
+#yaud .y-btn--color-background {
+  color: rgb(var(--color-background));
+}
+#yaud .y-btn--color-background.y-btn--variant-tonal {
+  background: rgba(var(--color-background), 0.15);
+}
+#yaud .y-btn--color-on-background {
+  color: rgb(var(--color-on-background));
+}
+#yaud .y-btn--color-on-background.y-btn--variant-tonal {
+  background: rgba(var(--color-on-background), 0.15);
+}
+#yaud .y-btn--color-surface {
+  color: rgb(var(--color-surface));
+}
+#yaud .y-btn--color-surface.y-btn--variant-tonal {
+  background: rgba(var(--color-surface), 0.15);
+}
+#yaud .y-btn--color-on-surface {
+  color: rgb(var(--color-on-surface));
+}
+#yaud .y-btn--color-on-surface.y-btn--variant-tonal {
+  background: rgba(var(--color-on-surface), 0.15);
+}
+#yaud .y-btn--color-surface-variant {
+  color: rgb(var(--color-surface-variant));
+}
+#yaud .y-btn--color-surface-variant.y-btn--variant-tonal {
+  background: rgba(var(--color-surface-variant), 0.15);
+}
+#yaud .y-btn--color-on-surface-variant {
+  color: rgb(var(--color-on-surface-variant));
+}
+#yaud .y-btn--color-on-surface-variant.y-btn--variant-tonal {
+  background: rgba(var(--color-on-surface-variant), 0.15);
+}
+#yaud .y-btn--color-outline {
+  color: rgb(var(--color-outline));
+}
+#yaud .y-btn--color-outline.y-btn--variant-tonal {
+  background: rgba(var(--color-outline), 0.15);
+}
+#yaud .y-btn--color-shadow {
+  color: rgb(var(--color-shadow));
+}
+#yaud .y-btn--color-shadow.y-btn--variant-tonal {
+  background: rgba(var(--color-shadow), 0.15);
+}
+#yaud .y-btn--color-outline-variant {
+  color: rgb(var(--color-outline-variant));
+}
+#yaud .y-btn--color-outline-variant.y-btn--variant-tonal {
+  background: rgba(var(--color-outline-variant), 0.15);
+}
+
+/*# sourceMappingURL=main.css.map */

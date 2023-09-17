@@ -1,0 +1,21 @@
+[application]
+name = "Yaud"
+default_platform = "web"
+out_dir = "dist"
+asset_dir = "src/web/public"
+
+[web.app]
+title = "Yaud"
+
+[web.watcher]
+reload_html = true
+watch_path = ["src/web", "locales"]
+index_on_404 = true
+
+[web.resource]
+style = ["tailwind.css", "fonts.css"]
+script = []
+
+[web.resource.dev]
+style = []
+script = []

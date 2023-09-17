@@ -15,9 +15,7 @@
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-use crate::hook::ActionType;
 use crate::prelude::*;
-use crate::CONFIGURATION;
 use lazy_static::lazy_static;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};

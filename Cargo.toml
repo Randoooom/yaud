@@ -6,29 +6,34 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-yaud-dioxus = { path = "./yaud-dioxus" }
-
+axum = { version = "0.6.19", optional = true }
 cfg-if = "1.0.0"
-envy = "0.4.2"
-getset = "0.1.2"
-kanal = "0.1.0-pre8"
-lazy_static = "1.4.0"
-lettre = { version = "0.10.4", features = ["tokio1-native-tls"] }
+dioxus = "0.4"
+dioxus-free-icons = { version = "0.7.0", features = ["feather"] }
+dioxus-fullstack = { version = "0.4", features = ["router"] }
+dioxus-router = "0.4"
+dioxus-web = { version = "0.4", features = ["hydrate"], optional = true }
+dotenvy = { version = "0.15.7", optional = true }
+envy = { version = "0.4.2", optional = true }
+kanal = { version = "0.1.0-pre8", optional = true }
+lazy_static = { version = "1.4.0", optional = true }
+lettre = { version = "0.10.4", features = ["tokio1-native-tls"], optional = true }
 serde = { version = "1.0.176", features = ["derive"] }
 serde_json = "1.0.104"
 strum = { version = "0.25.0", features = ["derive"] }
-surrealdb = { git = "https://github.com/surrealdb/surrealdb.git", rev = "28368d83c945b01c1a8cbc6aea1f88595177ef8d" }
-thiserror = "1.0.44"
-tokio = { version = "1.29.1", features = ["full"] }
-tracing = "0.1.37"
-tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
+surrealdb = { version = "1.0.0", optional = true }
+thiserror = { version = "1.0.44", optional = true }
+tokio = { version = "1.29.1", features = ["full"], optional = true }
+tower-http = { version = "0.4.4", features = ["compression-gzip"], optional = true }
+tracing = { version = "0.1.37", optional = true }
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"], optional = true }
 rust-i18n = "2.1.0"
-version-compare = "0.1.1"
+version-compare = { version = "0.1.1", optional = true }
 
 [features]
 default = []
-ssr = ["yaud-dioxus/ssr"]
-web = ["yaud-dioxus/web"]
+ssr = ["axum", "dotenvy", "dioxus-fullstack/axum", "envy", "kanal", "lazy_static", "lettre", "surrealdb", "thiserror", "tokio", "tower-http", "tracing", "tracing-subscriber", "version-compare"]
+web = ["dioxus-web"]
 
 [dev-dependencies]
 chrono = "0.4.26"

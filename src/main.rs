@@ -17,113 +17,55 @@
 
 #[macro_use]
 extern crate serde;
+#[cfg(feature = "ssr")]
 #[macro_use]
 extern crate thiserror;
-#[macro_use]
-extern crate getset;
+#[cfg(feature = "ssr")]
 #[macro_use]
 extern crate tracing;
+#[cfg(feature = "ssr")]
+#[macro_use]
+extern crate lazy_static;
 #[macro_use]
 extern crate serde_json;
 #[macro_use]
 extern crate rust_i18n;
 #[macro_use]
 extern crate strum;
-#[macro_use]
-extern crate lazy_static;
 
-use crate::error::ApplicationError;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
-
-mod database;
-mod error;
-mod hook;
-
-const HOOK_INTERVAL: u64 = 10000;
+#[cfg(feature = "ssr")]
+mod server;
+mod web;
 
 i18n!("locales", fallback = "en");
 
-#[derive(Deserialize, Debug, Clone)]
-pub struct Config {
-    surrealdb_endpoint: String,
-    surrealdb_username: String,
-    surrealdb_password: String,
-    smtp_host: String,
-    smtp_username: String,
-    smtp_password: String,
-    #[cfg(test)]
-    test_mail: String,
-    #[cfg(test)]
-    test_mail2: String,
-    #[cfg(test)]
-    test_mail_key: String,
-    #[cfg(test)]
-    test_mail_namespace: String,
-}
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(feature = "web")]
+    web::init()?;
 
-lazy_static! {
-    pub static ref CONFIGURATION: Config = envy::from_env::<Config>().unwrap();
-}
+    #[cfg(feature = "ssr")]
+    server::init()?;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    lazy_static::initialize(&CONFIGURATION);
-
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::from_default_env())
-        .with(tracing_subscriber::fmt::layer())
-        .init();
-
-    let (hook_sender, hook_receiver) = kanal::unbounded_async::<bool>();
-    let (dioxus_sender, dioxus_receiver) = kanal::unbounded_async::<bool>();
-
-    let info = database::connect(None).await?;
-    let connection = info.connection;
-
-    // as the surrealdb rust-sdk currently does not support live queries we have to adapt here
-    // and are regularly checking for new hook triggers.
-    tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                result = hook::hook(&connection) => {
-                    match result {
-                        Ok(()) => {},
-                        Err(error) => error!("Error occurred during hook: {}", error),
-                    }
-
-                    tokio::time::sleep(std::time::Duration::from_millis(HOOK_INTERVAL)).await;
-                },
-                _ = hook_receiver.recv() => {
-                    warn!("Received shutdown signal on kanal receiver");
-                    break;
-                }
-            }
-        }
-
-        Ok::<(), ApplicationError>(())
-    });
-
-    tokio::spawn(async move { yaud_dioxus::launch(dioxus_receiver) });
-
-    match tokio::signal::ctrl_c().await {
-        Ok(()) => {}
-        Err(error) => {
-            error!("Unable to listen for shutdown signal: {}", error);
-            hook_sender.send(true).await?;
-            dioxus_sender.send(true).await?;
-        }
-    }
-
-    info!("Received shutdown signal... Shutting down...");
-    // shutdown
-    hook_sender.send(true).await?;
-    dioxus_sender.send(true).await?;
     Ok(())
 }
 
 pub mod prelude {
-    pub use crate::database::DatabaseConnection;
-    pub use crate::error::*;
+    #[cfg(feature = "ssr")]
+    pub use crate::server::database::DatabaseConnection;
+    #[cfg(feature = "ssr")]
+    pub use crate::server::error::*;
+    #[cfg(feature = "ssr")]
+    pub use crate::server::hook::ActionType;
+    #[cfg(feature = "ssr")]
+    pub use crate::server::state::ApplicationState;
+    #[cfg(feature = "ssr")]
+    pub use crate::server::CONFIGURATION;
+    #[cfg(feature = "ssr")]
     pub use crate::sql_span;
+
+    pub use crate::web::route::Route;
+    pub use crate::{handler_navigate_to, optional_handler};
+    pub use dioxus::prelude::*;
+    pub use dioxus_fullstack::prelude::*;
+    pub use dioxus_router::prelude::*;
 }

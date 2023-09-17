@@ -1,0 +1,63 @@
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+@import "assets/styles/main.css";
+
+@layer base {
+    #yaud[data-theme="dark"] {
+        --color-primary: 85, 222, 158;
+        --color-on-primary: 0, 56, 34;
+        --color-primary-container: 0, 82, 51;
+        --color-on-primary-container: #75fbb8;
+        --color-secondary: 180, 204, 187;
+        --color-on-secondary: 32, 53, 41;
+        --color-secondary-container: 54, 75, 63;
+        --color-on-secondary-container: 208, 232, 215;
+        --color-tertiary: 56, 222, 187;
+        --color-on-tertiary: 0, 56, 45;
+        --color-tertiary-container: 0, 81, 66;
+        --color-on-tertiary-container: 95, 251, 214;
+        --color-error: 255, 180, 171;
+        --color-error-container: 147, 0, 10;
+        --color-on-error: 105, 0, 5;
+        --color-on-error-container: 255, 218, 214;
+        --color-background: 25, 28, 26;
+        --color-on-background: 225, 227, 223;
+        --color-surface: 25, 28, 26;
+        --color-on-surface: 225, 227, 223;
+        --color-surface-variant: 64, 73, 67;
+        --color-on-surface-variant: 192, 201, 193;
+        --color-outline: 138, 147, 139;
+        --color-shadow: 0, 0, 0;
+        --color-outline-variant: 64, 73, 67;
+    }
+
+    #yaud[data-theme="light"] {
+        --color-primary: 0, 108, 69;
+        --color-on-primary: 255, 255, 255;
+        --color-primary-container: 117, 251, 184;
+        --color-on-primary-container: 0, 33, 18;
+        --color-secondary: 78, 99, 86;
+        --color-on-secondary: 255, 255, 255;
+        --color-secondary-container: 208, 232, 215;
+        --color-on-secondary-container: 11, 31, 21;
+        --color-tertiary: 0, 107, 88;
+        --color-on-tertiary: 255, 255, 255;
+        --color-tertiary-container: 95, 251, 214;
+        --color-on-tertiary-container: 0, 32, 25;
+        --color-error: 186, 26, 26;
+        --color-error-container: 255, 218, 214;
+        --color-on-error: 255, 255, 255;
+        --color-on-error-container: 65, 0, 2;
+        --color-background: 251, 253, 248;
+        --color-on-background: 25, 28, 26;
+        --color-surface: 251, 253, 248;
+        --color-on-surface: 25, 28, 26;
+        --color-surface-variant: 220, 229, 220;
+        --color-on-surface-variant: 64, 73, 67;
+        --color-outline: 112, 121, 114;
+        --color-shadow: 0, 0, 0;
+        --color-outline-variant: 192, 201, 193;
+    }
+}
